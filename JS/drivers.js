@@ -1,0 +1,1 @@
+import { db, storage } from "./firebase-config.js";

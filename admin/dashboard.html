@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MoveMate Transport admin control center.">
+  <title>MoveMate Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="CSS/components.css">
+  <link rel="stylesheet" href="CSS/dashboard.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="sidebar" aria-label="Admin navigation">
+      <a class="brand-mark" href="dashboard.html" aria-label="MoveMate Control Center">
+        <span class="brand-emblem">
+          <img src="../images/logo.jpg" alt="MoveMate logo">
+        </span>
+        <span>
+          <strong>MoveMate</strong>
+          <small>Transport</small>
+        </span>
+      </a>
+
+      <nav class="side-nav" aria-label="Control Center sections">
+        <a class="active" href="#" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
+        <a href="#drivers" data-view="drivers"><i data-lucide="id-card"></i><span>Drivers</span></a>
+        <a href="#" data-view="passengers"><i data-lucide="users"></i><span>Passengers</span></a>
+        <a href="#" data-view="trips"><i data-lucide="route"></i><span>Trips</span></a>
+        <a href="#" data-view="requests"><i data-lucide="radio-tower"></i><span>Ride Requests</span></a>
+        <a href="#" data-view="bookings"><i data-lucide="calendar-check"></i><span>Bookings</span></a>
+        <a href="#" data-view="payments"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
+        <a href="#" data-view="support"><i data-lucide="headphones"></i><span>Support</span></a>
+        <a href="#" data-view="reports"><i data-lucide="chart-no-axes-combined"></i><span>Reports</span></a>
+        <a href="#" data-view="notifications"><i data-lucide="bell-ring"></i><span>Notifications</span></a>
+        <a href="#" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="ghost-button" type="button"><i data-lucide="log-out"></i><span>Logout</span></button>
+      </div>
+    </aside>
+
+    <div class="main-area">
+      <header class="topbar">
+        <button class="icon-button menu-toggle" type="button" aria-label="Toggle navigation">
+          <i data-lucide="menu"></i>
+        </button>
+        <label class="search-box">
+          <i data-lucide="search"></i>
+          <span class="sr-only">Search control center</span>
+          <input type="search" placeholder="Search drivers, trips, payments...">
+        </label>
+        <div class="topbar-actions">
+          <button class="icon-button notification-button" type="button" aria-label="Notifications">
+            <i data-lucide="bell"></i>
+            <span class="pulse-dot"></span>
+          </button>
+          <div class="admin-profile">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=96&q=80" alt="Current admin">
+            <span>
+              <strong>Administrator</strong>
+              <small>Operations Lead</small>
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <main class="dashboard-main">
+        <section class="hero-row">
+          <div>
+            <p class="eyebrow">Live operations workspace</p>
+            <h1>MoveMate Control Center</h1>
+            <p>Welcome back, Administrator.</p>
+          </div>
+          <div class="hero-status">
+            <span class="status-dot"></span>
+            <span>All core systems operational</span>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="MoveMate performance statistics">
+          <article class="metric-card">
+            <span class="metric-icon cyan"><i data-lucide="users"></i></span>
+            <div><p>Total Users</p><strong>18,420</strong><small><b>+12.4%</b> this month</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon green"><i data-lucide="steering-wheel"></i></span>
+            <div><p>Total Drivers</p><strong>1,286</strong><small><b>+38</b> new this week</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon amber"><i data-lucide="shield-alert"></i></span>
+            <div><p>Pending Driver Verification</p><strong>47</strong><small><b>18</b> high priority</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon cyan"><i data-lucide="map"></i></span>
+            <div><p>Trips Today</p><strong>642</strong><small><b>+8.1%</b> vs yesterday</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon amber"><i data-lucide="radio-tower"></i></span>
+            <div><p>Ride Requests</p><strong>213</strong><small><b>32</b> waiting match</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon green"><i data-lucide="calendar-check"></i></span>
+            <div><p>Bookings Today</p><strong>189</strong><small><b>+21</b> confirmed</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon cyan"><i data-lucide="banknote"></i></span>
+            <div><p>Revenue</p><strong>R84,930</strong><small><b>+15.7%</b> weekly trend</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon red"><i data-lucide="message-circle-warning"></i></span>
+            <div><p>Support Tickets</p><strong>24</strong><small><b>7</b> need response</small></div>
+          </article>
+        </section>
+
+        <div class="content-layout">
+          <section class="left-stack">
+            <div class="chart-grid">
+              <article class="panel chart-panel">
+                <div class="panel-head"><div><h2>Daily Trips</h2><p>Completed trips across key metros.</p></div><span>7 days</span></div>
+                <canvas id="dailyTripsChart" height="170"></canvas>
+              </article>
+              <article class="panel chart-panel">
+                <div class="panel-head"><div><h2>Weekly Bookings</h2><p>Advanced bookings by service tier.</p></div><span>8 weeks</span></div>
+                <canvas id="weeklyBookingsChart" height="170"></canvas>
+              </article>
+              <article class="panel chart-panel wide">
+                <div class="panel-head"><div><h2>Revenue Overview</h2><p>Projected payout and collected fare movement.</p></div><span>Rands</span></div>
+                <canvas id="revenueChart" height="190"></canvas>
+              </article>
+              <article class="panel chart-panel">
+                <div class="panel-head"><div><h2>Driver Growth</h2><p>Verified supply growth.</p></div><span>Monthly</span></div>
+                <canvas id="driverGrowthChart" height="170"></canvas>
+              </article>
+            </div>
+
+            <section class="panel table-panel" id="drivers">
+              <div class="panel-head table-head">
+                <div><h2>Driver Management</h2><p>Verification queue and account controls.</p></div>
+                <button class="primary-button" type="button"><i data-lucide="sliders-horizontal"></i>Review Queue</button>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Profile Picture</th>
+                      <th>Full Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Vehicle Model</th>
+                      <th>Number Plate</th>
+                      <th>Verification Status</th>
+                      <th>Application Status</th>
+                      <th>Driver Rating</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="driversTableBody">
+                    <tr class="skeleton-row">
+                      <td><span class="skeleton skeleton-avatar"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text wide"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-pill"></span></td>
+                      <td><span class="skeleton skeleton-pill"></span></td>
+                      <td><span class="skeleton skeleton-text short"></span></td>
+                      <td><span class="skeleton skeleton-actions"></span></td>
+                    </tr>
+                    <tr class="skeleton-row">
+                      <td><span class="skeleton skeleton-avatar"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text wide"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-pill"></span></td>
+                      <td><span class="skeleton skeleton-pill"></span></td>
+                      <td><span class="skeleton skeleton-text short"></span></td>
+                      <td><span class="skeleton skeleton-actions"></span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="table-message" id="driversTableMessage" hidden></p>
+            </section>
+          </section>
+
+          <aside class="right-stack" aria-label="Operations side panel">
+            <section class="panel quick-actions">
+              <div class="panel-head"><div><h2>Quick Actions</h2><p>Common operational tasks.</p></div></div>
+              <button type="button"><i data-lucide="shield-check"></i><span>Verify Drivers</span></button>
+              <button type="button"><i data-lucide="user-cog"></i><span>Manage Users</span></button>
+              <button type="button"><i data-lucide="file-chart-column"></i><span>View Reports</span></button>
+              <button type="button"><i data-lucide="megaphone"></i><span>Announcements</span></button>
+              <button type="button"><i data-lucide="activity"></i><span>System Status</span></button>
+            </section>
+
+            <section class="panel activity-feed">
+              <div class="panel-head"><div><h2>Recent Activity</h2><p>Latest platform events.</p></div></div>
+              <ol>
+                <li><span></span><div><strong>New driver registered.</strong><small>2 minutes ago</small></div></li>
+                <li><span></span><div><strong>Proof of Payment submitted.</strong><small>8 minutes ago</small></div></li>
+                <li><span></span><div><strong>Ride completed.</strong><small>14 minutes ago</small></div></li>
+                <li><span></span><div><strong>Passenger created account.</strong><small>22 minutes ago</small></div></li>
+                <li><span></span><div><strong>Driver uploaded licence.</strong><small>38 minutes ago</small></div></li>
+                <li><span></span><div><strong>Admin approved driver.</strong><small>1 hour ago</small></div></li>
+              </ol>
+            </section>
+
+            <section class="panel ops-panel">
+              <div class="panel-head"><div><h2>Operations</h2><p>Today at a glance.</p></div></div>
+              <div class="ops-block">
+                <h3>Recent Notifications</h3>
+                <p>3 payment proofs waiting for review in Gauteng.</p>
+              </div>
+              <div class="ops-block">
+                <h3>Pending Tasks</h3>
+                <p>47 driver checks, 7 support escalations, 12 vehicle photos.</p>
+              </div>
+              <div class="ops-block summary-line">
+                <span>Today's Summary</span><strong>R84.9k revenue</strong>
+              </div>
+              <div class="health-card">
+                <div><span class="status-dot"></span><strong>System Health</strong></div>
+                <p>API readiness, payments and booking flows are staged for Phase 2.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="driverDrawerBackdrop" hidden></div>
+  <aside class="driver-drawer" id="driverDrawer" aria-label="Driver details" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Driver profile</p>
+        <h2 id="drawerDriverName">Driver details</h2>
+      </div>
+      <button class="icon-button" id="closeDriverDrawer" type="button" aria-label="Close driver details">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div id="driverDrawerContent" class="drawer-content"></div>
+  </aside>
+
+  <div class="toast" id="adminToast" role="status" aria-live="polite" hidden></div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="JS/components.js"></script>
+  <script type="module" src="JS/dashboard.js"></script>
+</body>
+</html>
