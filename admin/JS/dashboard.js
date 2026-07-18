@@ -15,6 +15,9 @@ const firebaseConfigPaths = [
   "../../firebase-config.js"
 ];
 
+const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date"];
+const riderRoles = ["rider", "passenger"];
+
 const defaultAvatar =
   "data:image/svg+xml;charset=UTF-8," +
   encodeURIComponent(`
@@ -25,16 +28,28 @@ const defaultAvatar =
     </svg>
   `);
 
-const driverState = {
+const state = {
+  users: [],
+  trips: [],
+  bookings: [],
+  rideRequests: [],
+  chats: [],
   drivers: [],
+  riders: [],
   firebaseReady: false
 };
 
-const driverElements = {
-  tableBody: document.getElementById("driversTableBody"),
-  message: document.getElementById("driversTableMessage"),
+const elements = {
+  statCards: document.querySelectorAll("[data-stat]"),
+  activityFeed: document.querySelector(".activity-feed ol"),
+  liveCopy: document.querySelectorAll("[data-live-copy]"),
+  driverTableBody: document.getElementById("driversTableBody"),
+  driverMessage: document.getElementById("driversTableMessage"),
+  riderTableBody: document.getElementById("ridersTableBody"),
+  riderMessage: document.getElementById("ridersTableMessage"),
   drawer: document.getElementById("driverDrawer"),
   drawerBackdrop: document.getElementById("driverDrawerBackdrop"),
+  drawerType: document.getElementById("drawerProfileType"),
   drawerTitle: document.getElementById("drawerDriverName"),
   drawerContent: document.getElementById("driverDrawerContent"),
   closeDrawer: document.getElementById("closeDriverDrawer"),
@@ -44,26 +59,26 @@ const driverElements = {
 const chartData = {
   dailyTripsChart: {
     type: "bar",
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    values: [482, 526, 514, 588, 642, 701, 668],
+    labels: ["No data"],
+    values: [0],
     color: chartTheme.cyan
   },
   weeklyBookingsChart: {
     type: "line",
-    labels: ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"],
-    values: [820, 910, 870, 1040, 1165, 1240, 1194, 1370],
+    labels: ["No data"],
+    values: [0],
     color: chartTheme.green
   },
   revenueChart: {
     type: "area",
-    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-    values: [62000, 68400, 71800, 79200, 83930, 88400, 94900],
+    labels: ["No data"],
+    values: [0],
     color: chartTheme.cyan
   },
   driverGrowthChart: {
     type: "line",
-    labels: ["Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-    values: [860, 940, 1015, 1094, 1188, 1286],
+    labels: ["No data"],
+    values: [0],
     color: chartTheme.amber
   }
 };
@@ -97,13 +112,16 @@ function drawGrid(ctx, width, height, padding) {
 }
 
 function getPoints(values, width, height, padding) {
-  const max = Math.max(...values) * 1.08;
-  const min = Math.min(...values) * 0.92;
+  const safeValues = values.length ? values : [0];
+  const maxValue = Math.max(...safeValues, 1);
+  const minValue = Math.min(...safeValues, 0);
+  const max = maxValue * 1.08 || 1;
+  const min = minValue > 0 ? minValue * 0.92 : 0;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  return values.map((value, index) => {
-    const x = padding.left + (chartWidth / (values.length - 1 || 1)) * index;
+  return safeValues.map((value, index) => {
+    const x = padding.left + (chartWidth / (safeValues.length - 1 || 1)) * index;
     const y = padding.top + chartHeight - ((value - min) / (max - min || 1)) * chartHeight;
     return { x, y, value };
   });
@@ -171,18 +189,19 @@ function drawLineChart(ctx, config, width, height, padding, fillArea = false) {
 }
 
 function drawBarChart(ctx, config, width, height, padding) {
-  const max = Math.max(...config.values) * 1.12;
+  const values = config.values.length ? config.values : [0];
+  const max = Math.max(...values, 1) * 1.12;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const gap = 12;
-  const barWidth = Math.max(18, chartWidth / config.values.length - gap);
+  const barWidth = Math.max(18, chartWidth / values.length - gap);
   const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
 
   gradient.addColorStop(0, config.color);
   gradient.addColorStop(1, "rgba(24, 198, 216, 0.2)");
 
-  config.values.forEach((value, index) => {
-    const x = padding.left + index * (chartWidth / config.values.length) + gap / 2;
+  values.forEach((value, index) => {
+    const x = padding.left + index * (chartWidth / values.length) + gap / 2;
     const barHeight = (value / max) * chartHeight;
     const y = height - padding.bottom - barHeight;
 
@@ -234,12 +253,6 @@ function renderDashboardCharts() {
   Object.entries(chartData).forEach(([id, config]) => renderChart(id, config));
 }
 
-window.addEventListener("load", renderDashboardCharts);
-window.addEventListener("resize", () => {
-  window.clearTimeout(window.chartResizeTimer);
-  window.chartResizeTimer = window.setTimeout(renderDashboardCharts, 120);
-});
-
 function text(value, fallback = "Not provided") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
@@ -259,16 +272,31 @@ function escapeHtml(value) {
   });
 }
 
-function formatBooleanStatus(value) {
-  return value === true ? "Verified" : "Not verified";
+function formatNumber(value) {
+  return new Intl.NumberFormat("en-ZA").format(value);
+}
+
+function toDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (value.seconds) return new Date(value.seconds * 1000);
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getRecordDate(data) {
+  for (const field of timestampFields) {
+    const date = toDate(data[field]);
+    if (date) return date;
+  }
+
+  return null;
 }
 
 function formatDate(value) {
-  if (!value) return "Not provided";
-
-  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "Not provided";
+  const date = toDate(value);
+  if (!date) return "Not provided";
 
   return new Intl.DateTimeFormat("en-ZA", {
     day: "2-digit",
@@ -277,6 +305,29 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
+}
+
+function formatRelativeTime(date) {
+  if (!date) return "Date not provided";
+
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const ranges = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["week", 604800],
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60]
+  ];
+
+  for (const [unit, value] of ranges) {
+    const amount = Math.trunc(seconds / value);
+    if (Math.abs(amount) >= 1) {
+      return new Intl.RelativeTimeFormat("en-ZA", { numeric: "auto" }).format(amount, unit);
+    }
+  }
+
+  return "Just now";
 }
 
 function badgeClass(status) {
@@ -289,23 +340,27 @@ function badgeClass(status) {
   return "muted";
 }
 
-function showTableMessage(message, isError = false) {
-  if (!driverElements.message) return;
-
-  driverElements.message.hidden = false;
-  driverElements.message.textContent = message;
-  driverElements.message.style.color = isError ? "var(--danger)" : "var(--muted)";
+function formatBooleanStatus(value) {
+  return value === true ? "Verified" : "Not verified";
 }
 
-function hideTableMessage() {
-  if (!driverElements.message) return;
+function setTableMessage(element, message, isError = false) {
+  if (!element) return;
 
-  driverElements.message.hidden = true;
-  driverElements.message.textContent = "";
+  element.hidden = false;
+  element.textContent = message;
+  element.style.color = isError ? "var(--danger)" : "var(--muted)";
+}
+
+function hideTableMessage(element) {
+  if (!element) return;
+
+  element.hidden = true;
+  element.textContent = "";
 }
 
 function showToast(message) {
-  const toast = driverElements.toast;
+  const toast = elements.toast;
   if (!toast) return;
 
   toast.hidden = false;
@@ -349,15 +404,13 @@ async function importFirebaseHelpers() {
 
   return {
     collection: firestore.collection,
-    getDocs: firestore.getDocs,
-    query: firestore.query,
-    where: firestore.where,
+    onSnapshot: firestore.onSnapshot,
     ref: storage.ref,
     getDownloadURL: storage.getDownloadURL
   };
 }
 
-async function getDriverPhotoUrl(storage, storageRef, getDownloadURL, uid) {
+async function getProfilePhotoUrl(storage, storageRef, getDownloadURL, uid) {
   if (!uid) return defaultAvatar;
 
   try {
@@ -367,38 +420,213 @@ async function getDriverPhotoUrl(storage, storageRef, getDownloadURL, uid) {
   }
 }
 
-function normalizeDriver(doc, photoUrl) {
-  const data = doc.data();
-  const application = data.driver_application || {};
-  const vehicle = data.vehicle || {};
+function normalizeCollection(snapshot) {
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+}
+
+function isDriver(user) {
+  return text(user.role, "").toLowerCase() === "driver";
+}
+
+function isRider(user) {
+  return riderRoles.includes(text(user.role, "").toLowerCase());
+}
+
+function groupByMonth(records) {
+  const formatter = new Intl.DateTimeFormat("en-ZA", { month: "short" });
+  const groups = new Map();
+
+  records.forEach((record) => {
+    const date = getRecordDate(record);
+    if (!date) return;
+
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const label = formatter.format(date);
+    const existing = groups.get(key) || { label, value: 0 };
+    existing.value += 1;
+    groups.set(key, existing);
+  });
+
+  const values = [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, item]) => item)
+    .slice(-8);
+
+  if (!values.length) return { labels: ["No data"], values: [0] };
 
   return {
-    id: doc.id,
-    uid: text(data.uid, doc.id),
-    fullName: text(data.fullName || data.name),
-    email: text(data.email),
-    phone: text(data.phone),
-    whatsapp: text(data.whatsapp),
-    verifiedDriver: data.verified_driver === true,
-    verificationStatus: formatBooleanStatus(data.verified_driver),
-    driverRating: data.driver_rating ?? "New",
+    labels: values.map((item) => item.label),
+    values: values.map((item) => item.value)
+  };
+}
+
+function updateChart(id, records) {
+  const monthly = groupByMonth(records);
+  chartData[id].labels = monthly.labels;
+  chartData[id].values = monthly.values;
+}
+
+function updateStats() {
+  const stats = {
+    totalUsers: state.users.length,
+    totalDrivers: state.drivers.length,
+    verifiedDrivers: state.drivers.filter((driver) => driver.verified_driver === true).length,
+    passengers: state.riders.length,
+    trips: state.trips.length,
+    bookings: state.bookings.length,
+    rideRequests: state.rideRequests.length,
+    chats: state.chats.length
+  };
+
+  elements.statCards.forEach((card) => {
+    card.textContent = formatNumber(stats[card.dataset.stat] || 0);
+  });
+}
+
+function updateCharts() {
+  updateChart("dailyTripsChart", state.trips);
+  updateChart("weeklyBookingsChart", state.bookings);
+  updateChart("revenueChart", state.rideRequests);
+  updateChart("driverGrowthChart", state.drivers);
+  renderDashboardCharts();
+}
+
+function latestRecords() {
+  return [
+    ...state.users.map((record) => ({ record, type: isDriver(record) ? "Driver registered" : "Passenger created account" })),
+    ...state.trips.map((record) => ({ record, type: "Trip record created" })),
+    ...state.bookings.map((record) => ({ record, type: "Booking record created" })),
+    ...state.rideRequests.map((record) => ({ record, type: "Ride request submitted" })),
+    ...state.chats.map((record) => ({ record, type: "Chat activity recorded" }))
+  ]
+    .map((item) => ({ ...item, date: getRecordDate(item.record) }))
+    .filter((item) => item.date)
+    .sort((a, b) => b.date - a.date)
+    .slice(0, 6);
+}
+
+function updateActivity() {
+  if (!elements.activityFeed) return;
+
+  const activity = latestRecords();
+  if (!activity.length) {
+    elements.activityFeed.innerHTML = `<li><span></span><div><strong>No dated activity found yet.</strong><small>Firestore</small></div></li>`;
+    return;
+  }
+
+  elements.activityFeed.innerHTML = activity
+    .map(
+      (item) => `
+        <li>
+          <span></span>
+          <div>
+            <strong>${escapeHtml(item.type)}.</strong>
+            <small>${escapeHtml(formatRelativeTime(item.date))}</small>
+          </div>
+        </li>
+      `
+    )
+    .join("");
+}
+
+function updateOperationsCopy() {
+  const pendingDrivers = state.drivers.filter((driver) => driver.verified_driver !== true).length;
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const todayTrips = state.trips.filter((trip) => {
+    const date = getRecordDate(trip);
+    return date && date.toISOString().slice(0, 10) === todayKey;
+  }).length;
+
+  const copy = {
+    notifications: `${state.rideRequests.length} ride requests and ${state.bookings.length} bookings are currently in Firestore.`,
+    tasks: `${pendingDrivers} driver checks and ${state.riders.length} rider accounts are available for review.`,
+    summary: `${todayTrips} trips today`,
+    health: state.firebaseReady ? "Realtime Firestore listeners are active." : "Realtime listeners are starting."
+  };
+
+  elements.liveCopy.forEach((element) => {
+    element.textContent = copy[element.dataset.liveCopy] || "";
+  });
+}
+
+function renderLiveDashboard() {
+  state.drivers = state.users.filter(isDriver);
+  state.riders = state.users.filter(isRider);
+  updateStats();
+  updateCharts();
+  updateActivity();
+  updateOperationsCopy();
+}
+
+function normalizeDriver(record, photoUrl) {
+  const application = record.driver_application || {};
+  const vehicle = record.vehicle || {};
+
+  return {
+    id: record.id,
+    uid: text(record.uid, record.id),
+    fullName: text(record.fullName || record.name),
+    email: text(record.email),
+    phone: text(record.phone),
+    whatsapp: text(record.whatsapp),
+    verifiedDriver: record.verified_driver === true,
+    verificationStatus: formatBooleanStatus(record.verified_driver),
+    driverRating: record.driver_rating ?? "New",
     applicationStatus: text(application.status, "Not submitted"),
     idNumber: text(application.id_number),
-    createdAt: formatDate(data.createdAt),
+    createdAt: formatDate(record.createdAt),
     submittedAt: formatDate(application.submitted_at),
     vehicleModel: text(vehicle.car_model || application.car_model),
     carColor: text(vehicle.car_color || application.car_color),
     numberPlate: text(vehicle.number_plate || application.number_plate),
     vehicleSeats: text(vehicle.vehicle_seats || application.vehicle_seats),
     photoUrl,
-    raw: data
+    raw: record
   };
 }
 
-function renderDriverRows(drivers) {
-  if (!driverElements.tableBody) return;
+function normalizeRider(record) {
+  return {
+    id: record.id,
+    uid: text(record.uid, record.id),
+    fullName: text(record.fullName || record.name || record.displayName),
+    email: text(record.email),
+    phone: text(record.phone),
+    createdAt: formatDate(record.createdAt || record.created_at),
+    photoUrl: defaultAvatar,
+    raw: record
+  };
+}
 
-  driverElements.tableBody.innerHTML = drivers
+async function renderDriverRows(storageTools) {
+  if (!elements.driverTableBody) return;
+
+  if (!state.drivers.length) {
+    elements.driverTableBody.innerHTML = "";
+    setTableMessage(elements.driverMessage, "No registered drivers found.");
+    return;
+  }
+
+  const drivers = await Promise.all(
+    state.drivers.map(async (record) => {
+      const uid = record.uid || record.id;
+      const photoUrl = await getProfilePhotoUrl(
+        storageTools.storage,
+        storageTools.storageRef,
+        storageTools.getDownloadURL,
+        uid
+      );
+      return normalizeDriver(record, photoUrl);
+    })
+  );
+
+  state.normalizedDrivers = drivers;
+  hideTableMessage(elements.driverMessage);
+  elements.driverTableBody.innerHTML = drivers
     .map((driver, index) => {
       const verification = driver.verificationStatus;
       const application = driver.applicationStatus;
@@ -415,7 +643,7 @@ function renderDriverRows(drivers) {
           <td><span class="badge ${badgeClass(application)}">${escapeHtml(application)}</span></td>
           <td>${escapeHtml(driver.driverRating)}</td>
           <td class="action-cell">
-            <button type="button" data-action="view" data-driver-index="${index}">View</button>
+            <button type="button" data-action="view-driver" data-index="${index}">View</button>
             <button type="button" data-action="approve">Approve</button>
             <button type="button" data-action="reject">Reject</button>
             <button type="button" data-action="suspend">Suspend</button>
@@ -424,6 +652,38 @@ function renderDriverRows(drivers) {
         </tr>
       `;
     })
+    .join("");
+}
+
+function renderRiderRows() {
+  if (!elements.riderTableBody) return;
+
+  if (!state.riders.length) {
+    elements.riderTableBody.innerHTML = "";
+    setTableMessage(elements.riderMessage, "No registered riders found.");
+    return;
+  }
+
+  const riders = state.riders.map(normalizeRider);
+  state.normalizedRiders = riders;
+  hideTableMessage(elements.riderMessage);
+  elements.riderTableBody.innerHTML = riders
+    .map(
+      (rider, index) => `
+        <tr>
+          <td><img class="avatar" src="${rider.photoUrl}" alt="${escapeHtml(rider.fullName)}"></td>
+          <td>${escapeHtml(rider.fullName)}</td>
+          <td>${escapeHtml(rider.email)}</td>
+          <td>${escapeHtml(rider.phone)}</td>
+          <td>${escapeHtml(rider.createdAt)}</td>
+          <td class="action-cell">
+            <button type="button" data-action="view-rider" data-index="${index}">View</button>
+            <button type="button" data-action="suspend">Suspend</button>
+            <button type="button" data-action="delete">Delete</button>
+          </td>
+        </tr>
+      `
+    )
     .join("");
 }
 
@@ -436,11 +696,35 @@ function detailItem(label, value) {
   `;
 }
 
-function openDriverDrawer(driver) {
-  if (!driverElements.drawer || !driverElements.drawerContent) return;
+function formatFieldValue(value) {
+  if (value === null || value === undefined || value === "") return "Not provided";
+  if (typeof value.toDate === "function" || value.seconds) return formatDate(value);
+  if (Array.isArray(value)) return value.length ? value.map(formatFieldValue).join(", ") : "None";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
 
-  driverElements.drawerTitle.textContent = driver.fullName;
-  driverElements.drawerContent.innerHTML = `
+function labelFromField(field) {
+  return field
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function rawDetailItems(raw) {
+  return Object.entries(raw)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => detailItem(labelFromField(key), formatFieldValue(value)))
+    .join("");
+}
+
+function openDriverDrawer(driver) {
+  if (!elements.drawer || !elements.drawerContent) return;
+
+  elements.drawerType.textContent = "Driver profile";
+  elements.drawerTitle.textContent = driver.fullName;
+  elements.drawerContent.innerHTML = `
     <section class="driver-summary">
       <img class="drawer-avatar" src="${driver.photoUrl}" alt="${escapeHtml(driver.fullName)}">
       <div>
@@ -468,31 +752,55 @@ function openDriverDrawer(driver) {
     </section>
   `;
 
+  openDrawer();
+}
+
+function openRiderDrawer(rider) {
+  if (!elements.drawer || !elements.drawerContent) return;
+
+  elements.drawerType.textContent = "Rider profile";
+  elements.drawerTitle.textContent = rider.fullName;
+  elements.drawerContent.innerHTML = `
+    <section class="driver-summary">
+      <img class="drawer-avatar" src="${rider.photoUrl}" alt="${escapeHtml(rider.fullName)}">
+      <div>
+        <h3>${escapeHtml(rider.fullName)}</h3>
+        <p>${escapeHtml(rider.email)}</p>
+        <p>${escapeHtml(rider.phone)}</p>
+      </div>
+    </section>
+    <section class="detail-grid" aria-label="Complete rider information">
+      ${rawDetailItems(rider.raw)}
+    </section>
+  `;
+
+  openDrawer();
+}
+
+function openDrawer() {
   document.body.classList.add("drawer-open");
-  driverElements.drawerBackdrop.hidden = false;
-  driverElements.drawer.setAttribute("aria-hidden", "false");
+  elements.drawerBackdrop.hidden = false;
+  elements.drawer.setAttribute("aria-hidden", "false");
 }
 
 function closeDriverDrawer() {
   document.body.classList.remove("drawer-open");
-  driverElements.drawer?.setAttribute("aria-hidden", "true");
+  elements.drawer?.setAttribute("aria-hidden", "true");
 
   window.setTimeout(() => {
-    if (!document.body.classList.contains("drawer-open") && driverElements.drawerBackdrop) {
-      driverElements.drawerBackdrop.hidden = true;
+    if (!document.body.classList.contains("drawer-open") && elements.drawerBackdrop) {
+      elements.drawerBackdrop.hidden = true;
     }
   }, 220);
 }
 
-function bindDriverActions() {
-  driverElements.tableBody?.addEventListener("click", (event) => {
+function bindActions() {
+  elements.driverTableBody?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;
 
-    const action = button.dataset.action;
-
-    if (action === "view") {
-      const driver = driverState.drivers[Number(button.dataset.driverIndex)];
+    if (button.dataset.action === "view-driver") {
+      const driver = state.normalizedDrivers?.[Number(button.dataset.index)];
       if (driver) openDriverDrawer(driver);
       return;
     }
@@ -500,51 +808,88 @@ function bindDriverActions() {
     showToast("Coming in next phase");
   });
 
-  driverElements.closeDrawer?.addEventListener("click", closeDriverDrawer);
-  driverElements.drawerBackdrop?.addEventListener("click", closeDriverDrawer);
+  elements.riderTableBody?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+
+    if (button.dataset.action === "view-rider") {
+      const rider = state.normalizedRiders?.[Number(button.dataset.index)];
+      if (rider) openRiderDrawer(rider);
+      return;
+    }
+
+    showToast("Coming in next phase");
+  });
+
+  elements.closeDrawer?.addEventListener("click", closeDriverDrawer);
+  elements.drawerBackdrop?.addEventListener("click", closeDriverDrawer);
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeDriverDrawer();
   });
 }
 
-async function loadDrivers() {
-  if (!driverElements.tableBody) return;
+function listenToCollection(db, collection, onSnapshot, name, stateKey) {
+  return onSnapshot(
+    collection(db, name),
+    (snapshot) => {
+      state[stateKey] = normalizeCollection(snapshot);
+      state.firebaseReady = true;
+      renderLiveDashboard();
+    },
+    (error) => {
+      console.error(`Unable to listen to ${name}:`, error);
+      showToast(`Could not load ${name}. Check Firebase permissions.`);
+    }
+  );
+}
 
+async function startRealtimeDashboard() {
   try {
     const { db, storage } = await importExistingFirebaseConfig();
-    const { collection, getDocs, query, where, ref: storageRef, getDownloadURL } = await importFirebaseHelpers();
-    const driversQuery = query(collection(db, "users"), where("role", "==", "driver"));
-    const snapshot = await getDocs(driversQuery);
+    const { collection, onSnapshot, ref: storageRef, getDownloadURL } = await importFirebaseHelpers();
+    const storageTools = { storage, storageRef, getDownloadURL };
 
-    if (snapshot.empty) {
-      driverElements.tableBody.innerHTML = "";
-      showTableMessage("No registered drivers found.");
-      return;
-    }
+    listenToCollection(db, collection, onSnapshot, "trips", "trips");
+    listenToCollection(db, collection, onSnapshot, "bookings", "bookings");
+    listenToCollection(db, collection, onSnapshot, "ride_requests", "rideRequests");
+    listenToCollection(db, collection, onSnapshot, "chats", "chats");
 
-    const drivers = await Promise.all(
-      snapshot.docs.map(async (doc) => {
-        const uid = doc.data().uid || doc.id;
-        const photoUrl = await getDriverPhotoUrl(storage, storageRef, getDownloadURL, uid);
-        return normalizeDriver(doc, photoUrl);
-      })
+    onSnapshot(
+      collection(db, "users"),
+      async (snapshot) => {
+        state.users = normalizeCollection(snapshot);
+        state.drivers = state.users.filter(isDriver);
+        state.riders = state.users.filter(isRider);
+        state.firebaseReady = true;
+        renderLiveDashboard();
+        await renderDriverRows(storageTools);
+        renderRiderRows();
+
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      },
+      (error) => {
+        console.error("Unable to load MoveMate users:", error);
+        elements.driverTableBody.innerHTML = "";
+        elements.riderTableBody.innerHTML = "";
+        setTableMessage(elements.driverMessage, "We could not load registered drivers right now. Please check the Firebase connection and try again.", true);
+        setTableMessage(elements.riderMessage, "We could not load registered riders right now. Please check the Firebase connection and try again.", true);
+      }
     );
-
-    driverState.drivers = drivers;
-    driverState.firebaseReady = true;
-    hideTableMessage();
-    renderDriverRows(drivers);
-
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
   } catch (error) {
-    console.error("Unable to load MoveMate drivers:", error);
-    driverElements.tableBody.innerHTML = "";
-    showTableMessage("We could not load registered drivers right now. Please check the Firebase connection and try again.", true);
+    console.error("Unable to start MoveMate realtime dashboard:", error);
+    setTableMessage(elements.driverMessage, "We could not load registered drivers right now. Please check the Firebase connection and try again.", true);
+    setTableMessage(elements.riderMessage, "We could not load registered riders right now. Please check the Firebase connection and try again.", true);
   }
 }
 
-bindDriverActions();
-loadDrivers();
+window.addEventListener("load", renderDashboardCharts);
+window.addEventListener("resize", () => {
+  window.clearTimeout(window.chartResizeTimer);
+  window.chartResizeTimer = window.setTimeout(renderDashboardCharts, 120);
+});
+
+bindActions();
+startRealtimeDashboard();

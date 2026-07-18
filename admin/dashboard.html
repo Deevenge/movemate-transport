@@ -27,7 +27,7 @@
       <nav class="side-nav" aria-label="Control Center sections">
         <a class="active" href="#" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
         <a href="#drivers" data-view="drivers"><i data-lucide="id-card"></i><span>Drivers</span></a>
-        <a href="#" data-view="passengers"><i data-lucide="users"></i><span>Passengers</span></a>
+        <a href="#passengers" data-view="passengers"><i data-lucide="users"></i><span>Passengers</span></a>
         <a href="#" data-view="trips"><i data-lucide="route"></i><span>Trips</span></a>
         <a href="#" data-view="requests"><i data-lucide="radio-tower"></i><span>Ride Requests</span></a>
         <a href="#" data-view="bookings"><i data-lucide="calendar-check"></i><span>Bookings</span></a>
@@ -59,7 +59,7 @@
             <span class="pulse-dot"></span>
           </button>
           <div class="admin-profile">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=96&q=80" alt="Current admin">
+            <img src="images/face.jpg" alt="Current admin">
             <span>
               <strong>Administrator</strong>
               <small>Operations Lead</small>
@@ -84,35 +84,35 @@
         <section class="metric-grid" aria-label="MoveMate performance statistics">
           <article class="metric-card">
             <span class="metric-icon cyan"><i data-lucide="users"></i></span>
-            <div><p>Total Users</p><strong>18,420</strong><small><b>+12.4%</b> this month</small></div>
+            <div><p>Total Users</p><strong data-stat="totalUsers">...</strong><small>Live from users</small></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon green"><i data-lucide="steering-wheel"></i></span>
-            <div><p>Total Drivers</p><strong>1,286</strong><small><b>+38</b> new this week</small></div>
+            <div><p>Total Drivers</p><strong data-stat="totalDrivers">...</strong><small>Role: driver</small></div>
           </article>
           <article class="metric-card">
-            <span class="metric-icon amber"><i data-lucide="shield-alert"></i></span>
-            <div><p>Pending Driver Verification</p><strong>47</strong><small><b>18</b> high priority</small></div>
+            <span class="metric-icon amber"><i data-lucide="shield-check"></i></span>
+            <div><p>Verified Drivers</p><strong data-stat="verifiedDrivers">...</strong><small>verified_driver is true</small></div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-icon cyan"><i data-lucide="user-round"></i></span>
+            <div><p>Passengers</p><strong data-stat="passengers">...</strong><small>Role: rider or passenger</small></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon cyan"><i data-lucide="map"></i></span>
-            <div><p>Trips Today</p><strong>642</strong><small><b>+8.1%</b> vs yesterday</small></div>
-          </article>
-          <article class="metric-card">
-            <span class="metric-icon amber"><i data-lucide="radio-tower"></i></span>
-            <div><p>Ride Requests</p><strong>213</strong><small><b>32</b> waiting match</small></div>
+            <div><p>Trips</p><strong data-stat="trips">...</strong><small>Live from trips</small></div>
           </article>
           <article class="metric-card">
             <span class="metric-icon green"><i data-lucide="calendar-check"></i></span>
-            <div><p>Bookings Today</p><strong>189</strong><small><b>+21</b> confirmed</small></div>
+            <div><p>Bookings</p><strong data-stat="bookings">...</strong><small>Live from bookings</small></div>
           </article>
           <article class="metric-card">
-            <span class="metric-icon cyan"><i data-lucide="banknote"></i></span>
-            <div><p>Revenue</p><strong>R84,930</strong><small><b>+15.7%</b> weekly trend</small></div>
+            <span class="metric-icon amber"><i data-lucide="radio-tower"></i></span>
+            <div><p>Ride Requests</p><strong data-stat="rideRequests">...</strong><small>Live from ride_requests</small></div>
           </article>
           <article class="metric-card">
-            <span class="metric-icon red"><i data-lucide="message-circle-warning"></i></span>
-            <div><p>Support Tickets</p><strong>24</strong><small><b>7</b> need response</small></div>
+            <span class="metric-icon red"><i data-lucide="messages-square"></i></span>
+            <div><p>Chats</p><strong data-stat="chats">...</strong><small>Live from chats</small></div>
           </article>
         </section>
 
@@ -120,19 +120,19 @@
           <section class="left-stack">
             <div class="chart-grid">
               <article class="panel chart-panel">
-                <div class="panel-head"><div><h2>Daily Trips</h2><p>Completed trips across key metros.</p></div><span>7 days</span></div>
+                <div class="panel-head"><div><h2>Trips Created</h2><p>Firestore records grouped by month.</p></div><span>Monthly</span></div>
                 <canvas id="dailyTripsChart" height="170"></canvas>
               </article>
               <article class="panel chart-panel">
-                <div class="panel-head"><div><h2>Weekly Bookings</h2><p>Advanced bookings by service tier.</p></div><span>8 weeks</span></div>
+                <div class="panel-head"><div><h2>Bookings Created</h2><p>Firestore records grouped by month.</p></div><span>Monthly</span></div>
                 <canvas id="weeklyBookingsChart" height="170"></canvas>
               </article>
               <article class="panel chart-panel wide">
-                <div class="panel-head"><div><h2>Revenue Overview</h2><p>Projected payout and collected fare movement.</p></div><span>Rands</span></div>
+                <div class="panel-head"><div><h2>Ride Requests</h2><p>Firestore records grouped by month.</p></div><span>Monthly</span></div>
                 <canvas id="revenueChart" height="190"></canvas>
               </article>
               <article class="panel chart-panel">
-                <div class="panel-head"><div><h2>Driver Growth</h2><p>Verified supply growth.</p></div><span>Monthly</span></div>
+                <div class="panel-head"><div><h2>Driver Registrations</h2><p>Driver user records grouped by month.</p></div><span>Monthly</span></div>
                 <canvas id="driverGrowthChart" height="170"></canvas>
               </article>
             </div>
@@ -188,6 +188,38 @@
               </div>
               <p class="table-message" id="driversTableMessage" hidden></p>
             </section>
+
+            <section class="panel table-panel" id="passengers">
+              <div class="panel-head table-head">
+                <div><h2>Rider Management</h2><p>Passenger accounts and account controls.</p></div>
+                <button class="primary-button" type="button"><i data-lucide="users"></i>Manage Riders</button>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Avatar</th>
+                      <th>Full Name</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Created Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ridersTableBody">
+                    <tr class="skeleton-row">
+                      <td><span class="skeleton skeleton-avatar"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text wide"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-text"></span></td>
+                      <td><span class="skeleton skeleton-actions"></span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="table-message" id="ridersTableMessage" hidden></p>
+            </section>
           </section>
 
           <aside class="right-stack" aria-label="Operations side panel">
@@ -203,12 +235,7 @@
             <section class="panel activity-feed">
               <div class="panel-head"><div><h2>Recent Activity</h2><p>Latest platform events.</p></div></div>
               <ol>
-                <li><span></span><div><strong>New driver registered.</strong><small>2 minutes ago</small></div></li>
-                <li><span></span><div><strong>Proof of Payment submitted.</strong><small>8 minutes ago</small></div></li>
-                <li><span></span><div><strong>Ride completed.</strong><small>14 minutes ago</small></div></li>
-                <li><span></span><div><strong>Passenger created account.</strong><small>22 minutes ago</small></div></li>
-                <li><span></span><div><strong>Driver uploaded licence.</strong><small>38 minutes ago</small></div></li>
-                <li><span></span><div><strong>Admin approved driver.</strong><small>1 hour ago</small></div></li>
+                <li><span></span><div><strong>Loading live activity.</strong><small>Firestore</small></div></li>
               </ol>
             </section>
 
@@ -216,18 +243,18 @@
               <div class="panel-head"><div><h2>Operations</h2><p>Today at a glance.</p></div></div>
               <div class="ops-block">
                 <h3>Recent Notifications</h3>
-                <p>3 payment proofs waiting for review in Gauteng.</p>
+                <p data-live-copy="notifications">Loading live platform records.</p>
               </div>
               <div class="ops-block">
                 <h3>Pending Tasks</h3>
-                <p>47 driver checks, 7 support escalations, 12 vehicle photos.</p>
+                <p data-live-copy="tasks">Loading live platform records.</p>
               </div>
               <div class="ops-block summary-line">
-                <span>Today's Summary</span><strong>R84.9k revenue</strong>
+                <span>Today's Summary</span><strong data-live-copy="summary">Loading...</strong>
               </div>
               <div class="health-card">
                 <div><span class="status-dot"></span><strong>System Health</strong></div>
-                <p>API readiness, payments and booking flows are staged for Phase 2.</p>
+                <p data-live-copy="health">Realtime listeners are starting.</p>
               </div>
             </section>
           </aside>
@@ -240,7 +267,7 @@
   <aside class="driver-drawer" id="driverDrawer" aria-label="Driver details" aria-hidden="true">
     <div class="drawer-head">
       <div>
-        <p class="eyebrow">Driver profile</p>
+        <p class="eyebrow" id="drawerProfileType">Driver profile</p>
         <h2 id="drawerDriverName">Driver details</h2>
       </div>
       <button class="icon-button" id="closeDriverDrawer" type="button" aria-label="Close driver details">
