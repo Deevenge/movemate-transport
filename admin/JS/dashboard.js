@@ -36,6 +36,10 @@ const state = {
   chats: [],
   drivers: [],
   riders: [],
+  admin: null,
+  adminId: "movemate-admin",
+  selectedAdminPhoto: null,
+  selectedAdminPhotoPreview: null,
   firebaseReady: false
 };
 
@@ -53,6 +57,22 @@ const elements = {
   drawerTitle: document.getElementById("drawerDriverName"),
   drawerContent: document.getElementById("driverDrawerContent"),
   closeDrawer: document.getElementById("closeDriverDrawer"),
+  adminAccount: document.getElementById("adminAccount"),
+  adminProfileToggle: document.getElementById("adminProfileToggle"),
+  adminAccountMenu: document.getElementById("adminAccountMenu"),
+  adminProfileImage: document.getElementById("adminProfileImage"),
+  adminProfileName: document.getElementById("adminProfileName"),
+  adminProfileRole: document.getElementById("adminProfileRole"),
+  adminProfileBackdrop: document.getElementById("adminProfileBackdrop"),
+  adminProfileModal: document.getElementById("adminProfileModal"),
+  closeAdminProfile: document.getElementById("closeAdminProfile"),
+  adminProfilePreview: document.getElementById("adminProfilePreview"),
+  adminPhotoInput: document.getElementById("adminPhotoInput"),
+  saveAdminPhoto: document.getElementById("saveAdminPhoto"),
+  adminModalName: document.getElementById("adminModalName"),
+  adminModalEmail: document.getElementById("adminModalEmail"),
+  adminModalRole: document.getElementById("adminModalRole"),
+  adminModalPhone: document.getElementById("adminModalPhone"),
   toast: document.getElementById("adminToast")
 };
 
@@ -376,6 +396,108 @@ function showToast(message) {
   }, 2200);
 }
 
+function defaultAdminProfile(auth) {
+  const user = auth?.currentUser;
+
+  return {
+    fullName: user?.displayName || "Administrator",
+    email: user?.email || "Not provided",
+    role: "Operations Lead",
+    phone: user?.phoneNumber || "Not provided",
+    photoURL: "images/face.jpg"
+  };
+}
+
+function currentAdminId(auth) {
+  return auth?.currentUser?.uid || "movemate-admin";
+}
+
+function normalizedAdminProfile(profile, auth) {
+  const fallback = defaultAdminProfile(auth);
+  const data = profile || {};
+
+  return {
+    fullName: text(data.fullName, fallback.fullName),
+    email: text(data.email, fallback.email),
+    role: text(data.role, fallback.role),
+    phone: text(data.phone, fallback.phone),
+    photoURL: text(data.photoURL, fallback.photoURL)
+  };
+}
+
+function renderAdminProfile() {
+  const adminAuth = { currentUser: state.firebaseTools?.adminUser || state.firebaseTools?.auth?.currentUser };
+  const admin = normalizedAdminProfile(state.admin, adminAuth);
+
+  if (elements.adminProfileImage) elements.adminProfileImage.src = admin.photoURL;
+  if (elements.adminProfilePreview) elements.adminProfilePreview.src = state.selectedAdminPhotoPreview || admin.photoURL;
+  if (elements.adminProfileName) elements.adminProfileName.textContent = admin.fullName;
+  if (elements.adminProfileRole) elements.adminProfileRole.textContent = admin.role;
+  if (elements.adminModalName) elements.adminModalName.textContent = admin.fullName;
+  if (elements.adminModalEmail) elements.adminModalEmail.textContent = admin.email;
+  if (elements.adminModalRole) elements.adminModalRole.textContent = admin.role;
+  if (elements.adminModalPhone) elements.adminModalPhone.textContent = admin.phone;
+}
+
+function openAdminMenu() {
+  if (!elements.adminAccountMenu || !elements.adminProfileToggle) return;
+
+  elements.adminAccountMenu.hidden = false;
+  elements.adminProfileToggle.setAttribute("aria-expanded", "true");
+  window.requestAnimationFrame(() => elements.adminAccountMenu.classList.add("open"));
+}
+
+function closeAdminMenu() {
+  if (!elements.adminAccountMenu || !elements.adminProfileToggle) return;
+
+  elements.adminAccountMenu.classList.remove("open");
+  elements.adminProfileToggle.setAttribute("aria-expanded", "false");
+  window.setTimeout(() => {
+    if (!elements.adminAccountMenu.classList.contains("open")) {
+      elements.adminAccountMenu.hidden = true;
+    }
+  }, 180);
+}
+
+function toggleAdminMenu() {
+  if (elements.adminAccountMenu?.classList.contains("open")) {
+    closeAdminMenu();
+  } else {
+    openAdminMenu();
+  }
+}
+
+function openAdminProfileModal() {
+  closeAdminMenu();
+  renderAdminProfile();
+  document.body.classList.add("admin-profile-open");
+  elements.adminProfileBackdrop.hidden = false;
+  elements.adminProfileModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeAdminProfileModal() {
+  document.body.classList.remove("admin-profile-open");
+  elements.adminProfileModal?.setAttribute("aria-hidden", "true");
+  resetAdminPhotoSelection();
+
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("admin-profile-open") && elements.adminProfileBackdrop) {
+      elements.adminProfileBackdrop.hidden = true;
+    }
+  }, 220);
+}
+
+function resetAdminPhotoSelection() {
+  if (state.selectedAdminPhotoPreview) {
+    URL.revokeObjectURL(state.selectedAdminPhotoPreview);
+  }
+
+  state.selectedAdminPhoto = null;
+  state.selectedAdminPhotoPreview = null;
+  if (elements.adminPhotoInput) elements.adminPhotoInput.value = "";
+  renderAdminProfile();
+}
+
 async function importExistingFirebaseConfig() {
   let lastError;
 
@@ -384,12 +506,13 @@ async function importExistingFirebaseConfig() {
       const config = await import(path);
       const db = config.db || config.firestore;
       const storage = config.storage;
+      const auth = config.auth;
 
       if (!db || !storage) {
         throw new Error(`Firebase config at ${path} must export db and storage.`);
       }
 
-      return { db, storage };
+      return { db, storage, auth };
     } catch (error) {
       lastError = error;
     }
@@ -401,12 +524,18 @@ async function importExistingFirebaseConfig() {
 async function importFirebaseHelpers() {
   const firestore = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
   const storage = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js");
+  const auth = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js");
 
   return {
     collection: firestore.collection,
+    doc: firestore.doc,
     onSnapshot: firestore.onSnapshot,
+    setDoc: firestore.setDoc,
+    serverTimestamp: firestore.serverTimestamp,
     ref: storage.ref,
-    getDownloadURL: storage.getDownloadURL
+    getDownloadURL: storage.getDownloadURL,
+    uploadBytes: storage.uploadBytes,
+    onAuthStateChanged: auth.onAuthStateChanged
   };
 }
 
@@ -794,7 +923,158 @@ function closeDriverDrawer() {
   }, 220);
 }
 
+async function saveAdminProfilePhoto() {
+  if (!state.selectedAdminPhoto) {
+    showToast("Choose a profile picture first.");
+    return;
+  }
+
+  const tools = state.firebaseTools;
+  if (!tools?.db || !tools?.storage) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+
+  if (elements.saveAdminPhoto) {
+    elements.saveAdminPhoto.disabled = true;
+    elements.saveAdminPhoto.textContent = "Saving...";
+  }
+
+  try {
+    const safeName = state.selectedAdminPhoto.name.replace(/[^a-z0-9._-]/gi, "-").toLowerCase();
+    const imagePath = `admin_profile_pictures/${state.adminId}/${Date.now()}-${safeName}`;
+    const imageRef = tools.storageRef(tools.storage, imagePath);
+
+    await tools.uploadBytes(imageRef, state.selectedAdminPhoto);
+    const photoURL = await tools.getDownloadURL(imageRef);
+
+    await tools.setDoc(
+      tools.doc(tools.db, "admins", state.adminId),
+      {
+        photoURL,
+        updatedAt: tools.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    state.admin = {
+      ...normalizedAdminProfile(state.admin, { currentUser: tools.adminUser || tools.auth?.currentUser }),
+      photoURL
+    };
+    resetAdminPhotoSelection();
+    renderAdminProfile();
+    showToast("Profile picture updated.");
+  } catch (error) {
+    console.error("Unable to update administrator profile picture:", error);
+    showToast("Could not save profile picture. Check Firebase permissions.");
+  } finally {
+    if (elements.saveAdminPhoto) {
+      elements.saveAdminPhoto.disabled = false;
+      elements.saveAdminPhoto.innerHTML = `<i data-lucide="save"></i>Save New Picture`;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+}
+
+function listenToAdminProfile(tools) {
+  state.adminId = tools.adminUser?.uid || currentAdminId(tools.auth);
+  const adminRef = tools.doc(tools.db, "admins", state.adminId);
+
+  return tools.onSnapshot(
+    adminRef,
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        state.admin = snapshot.data();
+        renderAdminProfile();
+        return;
+      }
+
+      const fallback = defaultAdminProfile({ currentUser: tools.adminUser || tools.auth?.currentUser });
+      state.admin = fallback;
+      renderAdminProfile();
+
+      try {
+        await tools.setDoc(
+          adminRef,
+          {
+            ...fallback,
+            createdAt: tools.serverTimestamp(),
+            updatedAt: tools.serverTimestamp()
+          },
+          { merge: true }
+        );
+      } catch (error) {
+        console.error("Unable to create administrator profile:", error);
+      }
+    },
+    (error) => {
+      console.error("Unable to listen to administrator profile:", error);
+      renderAdminProfile();
+    }
+  );
+}
+
+function startAdminProfileListener(tools) {
+  if (!tools.auth || !tools.onAuthStateChanged) {
+    return listenToAdminProfile(tools);
+  }
+
+  let unsubscribeProfile;
+  return tools.onAuthStateChanged(tools.auth, (user) => {
+    if (unsubscribeProfile) unsubscribeProfile();
+    tools.adminUser = user;
+    unsubscribeProfile = listenToAdminProfile(tools);
+  });
+}
+
 function bindActions() {
+  elements.adminProfileToggle?.addEventListener("click", toggleAdminMenu);
+  elements.adminProfileToggle?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleAdminMenu();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!elements.adminAccount?.contains(event.target)) {
+      closeAdminMenu();
+    }
+  });
+
+  elements.adminAccountMenu?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-admin-menu]");
+    if (!button) return;
+
+    if (button.dataset.adminMenu === "profile") {
+      openAdminProfileModal();
+      return;
+    }
+
+    closeAdminMenu();
+    showToast("Coming Soon");
+  });
+
+  elements.closeAdminProfile?.addEventListener("click", closeAdminProfileModal);
+  elements.adminProfileBackdrop?.addEventListener("click", closeAdminProfileModal);
+
+  elements.adminPhotoInput?.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (state.selectedAdminPhotoPreview) {
+      URL.revokeObjectURL(state.selectedAdminPhotoPreview);
+    }
+
+    state.selectedAdminPhoto = file;
+    state.selectedAdminPhotoPreview = URL.createObjectURL(file);
+    if (elements.adminProfilePreview) {
+      elements.adminProfilePreview.src = state.selectedAdminPhotoPreview;
+    }
+  });
+
+  elements.saveAdminPhoto?.addEventListener("click", saveAdminProfilePhoto);
+
   elements.driverTableBody?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) return;
@@ -825,7 +1105,11 @@ function bindActions() {
   elements.drawerBackdrop?.addEventListener("click", closeDriverDrawer);
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeDriverDrawer();
+    if (event.key === "Escape") {
+      closeAdminMenu();
+      closeAdminProfileModal();
+      closeDriverDrawer();
+    }
   });
 }
 
@@ -846,10 +1130,34 @@ function listenToCollection(db, collection, onSnapshot, name, stateKey) {
 
 async function startRealtimeDashboard() {
   try {
-    const { db, storage } = await importExistingFirebaseConfig();
-    const { collection, onSnapshot, ref: storageRef, getDownloadURL } = await importFirebaseHelpers();
+    const { db, storage, auth } = await importExistingFirebaseConfig();
+    const {
+      collection,
+      doc,
+      onSnapshot,
+      setDoc,
+      serverTimestamp,
+      ref: storageRef,
+      getDownloadURL,
+      uploadBytes,
+      onAuthStateChanged
+    } = await importFirebaseHelpers();
     const storageTools = { storage, storageRef, getDownloadURL };
+    state.firebaseTools = {
+      db,
+      storage,
+      auth,
+      doc,
+      onSnapshot,
+      setDoc,
+      serverTimestamp,
+      storageRef,
+      getDownloadURL,
+      uploadBytes,
+      onAuthStateChanged
+    };
 
+    startAdminProfileListener(state.firebaseTools);
     listenToCollection(db, collection, onSnapshot, "trips", "trips");
     listenToCollection(db, collection, onSnapshot, "bookings", "bookings");
     listenToCollection(db, collection, onSnapshot, "ride_requests", "rideRequests");

@@ -58,12 +58,20 @@
             <i data-lucide="bell"></i>
             <span class="pulse-dot"></span>
           </button>
-          <div class="admin-profile">
-            <img src="images/face.jpg" alt="Current admin">
-            <span>
-              <strong>Administrator</strong>
-              <small>Operations Lead</small>
-            </span>
+          <div class="admin-account" id="adminAccount">
+            <div class="admin-profile" id="adminProfileToggle" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+              <img id="adminProfileImage" src="images/face.jpg" alt="Current admin">
+              <span>
+                <strong id="adminProfileName">Administrator</strong>
+                <small id="adminProfileRole">Operations Lead</small>
+              </span>
+            </div>
+            <div class="admin-menu" id="adminAccountMenu" aria-label="Administrator account menu" hidden>
+              <button type="button" data-admin-menu="profile"><span>👤</span>My Profile</button>
+              <button type="button" data-admin-menu="settings"><span>⚙️</span>Account Settings</button>
+              <button type="button" data-admin-menu="activity"><span>📜</span>Activity Log</button>
+              <button type="button" data-admin-menu="logout"><span>🚪</span>Logout</button>
+            </div>
           </div>
         </div>
       </header>
@@ -276,6 +284,49 @@
     </div>
     <div id="driverDrawerContent" class="drawer-content"></div>
   </aside>
+
+  <div class="admin-modal-backdrop" id="adminProfileBackdrop" hidden></div>
+  <section class="admin-profile-modal" id="adminProfileModal" aria-label="Administrator profile" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Administrator account</p>
+        <h2>My Profile</h2>
+      </div>
+      <button class="icon-button" id="closeAdminProfile" type="button" aria-label="Close administrator profile">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="admin-profile-editor">
+      <div class="admin-photo-editor">
+        <img id="adminProfilePreview" src="images/face.jpg" alt="Administrator profile preview">
+        <label class="primary-button" for="adminPhotoInput">
+          <i data-lucide="image-up"></i>Change Profile Picture
+        </label>
+        <input id="adminPhotoInput" type="file" accept="image/*">
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span>Full Name</span>
+          <strong id="adminModalName">Administrator</strong>
+        </div>
+        <div class="detail-item">
+          <span>Email Address</span>
+          <strong id="adminModalEmail">Not provided</strong>
+        </div>
+        <div class="detail-item">
+          <span>Role</span>
+          <strong id="adminModalRole">Operations Lead</strong>
+        </div>
+        <div class="detail-item">
+          <span>Phone Number</span>
+          <strong id="adminModalPhone">Not provided</strong>
+        </div>
+      </div>
+      <button class="primary-button admin-save-photo" id="saveAdminPhoto" type="button">
+        <i data-lucide="save"></i>Save New Picture
+      </button>
+    </div>
+  </section>
 
   <div class="toast" id="adminToast" role="status" aria-live="polite" hidden></div>
 
