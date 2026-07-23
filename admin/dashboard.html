@@ -95,7 +95,7 @@
             <div><p>Total Users</p><strong data-stat="totalUsers">...</strong><small>Live from users</small></div>
           </article>
           <article class="metric-card">
-            <span class="metric-icon green"><i data-lucide="steering-wheel"></i></span>
+            <span class="metric-icon green"><i data-lucide="car-front"></i></span>
             <div><p>Total Drivers</p><strong data-stat="totalDrivers">...</strong><small>Role: driver</small></div>
           </article>
           <article class="metric-card">
@@ -380,6 +380,10 @@
     </div>
     <div class="driver-action-modal-body">
       <p id="confirmActionMessage" class="confirm-action-message"></p>
+      <label class="modal-field" id="confirmActionReasonField" for="confirmActionReasonInput" hidden>
+        <span id="confirmActionReasonLabel">Message for user</span>
+        <textarea id="confirmActionReasonInput" rows="4"></textarea>
+      </label>
       <div class="drawer-action-buttons">
         <button type="button" id="cancelConfirmAction">Cancel</button>
         <button class="primary-button danger-button" id="confirmActionButton" type="button">Confirm</button>

@@ -43,6 +43,7 @@ const state = {
   firebaseReady: false,
   openDriverId: null,
   pendingRejectDriverId: null,
+  pendingRejectTarget: null,
   pendingConfirmAction: null
 };
 
@@ -93,6 +94,9 @@ const elements = {
   confirmActionEyebrow: document.getElementById("confirmActionEyebrow"),
   confirmActionTitle: document.getElementById("confirmActionTitle"),
   confirmActionMessage: document.getElementById("confirmActionMessage"),
+  confirmActionReasonField: document.getElementById("confirmActionReasonField"),
+  confirmActionReasonLabel: document.getElementById("confirmActionReasonLabel"),
+  confirmActionReasonInput: document.getElementById("confirmActionReasonInput"),
   closeConfirmAction: document.getElementById("closeConfirmAction"),
   cancelConfirmAction: document.getElementById("cancelConfirmAction"),
   confirmActionButton: document.getElementById("confirmActionButton")
@@ -794,6 +798,9 @@ function normalizeRider(record) {
     fullName: text(record.fullName || record.name || record.displayName),
     email: text(record.email),
     phone: text(record.phone),
+    accountStatus: text(record.accountStatus || record.userStatus || record.status, "active"),
+    accountStatusMessage: text(record.accountStatusMessage || record.statusMessage),
+    accountStatusReason: text(record.accountStatusReason || record.statusReason),
     createdAt: formatDate(record.createdAt || record.created_at),
     photoUrl: defaultAvatar,
     raw: record
@@ -866,9 +873,11 @@ function renderRiderRows() {
           <td>${escapeHtml(rider.phone)}</td>
           <td>${escapeHtml(rider.createdAt)}</td>
           <td class="action-cell">
-            <button type="button" data-action="view-rider" data-index="${index}">View</button>
-            <button type="button" data-action="suspend">Suspend</button>
-            <button type="button" data-action="delete">Delete</button>
+            <button type="button" data-action="view-rider" data-index="${index}" data-user-id="${escapeHtml(rider.id)}">View</button>
+            <button type="button" data-action="approve-user" data-user-id="${escapeHtml(rider.id)}">Approve</button>
+            <button type="button" data-action="reject-user" data-user-id="${escapeHtml(rider.id)}">Reject</button>
+            <button type="button" data-action="suspend-user" data-user-id="${escapeHtml(rider.id)}">Suspend</button>
+            <button type="button" data-action="delete-user" data-user-id="${escapeHtml(rider.id)}">Delete</button>
           </td>
         </tr>
       `
@@ -1094,6 +1103,17 @@ function openRiderDrawer(rider) {
     <section class="detail-grid" aria-label="Complete rider information">
       ${rawDetailItems(rider.raw)}
     </section>
+    ${drawerSection(
+      "Admin Actions",
+      `
+        <div class="drawer-action-buttons">
+          <button type="button" class="primary-button" data-user-action="approve-user" data-user-id="${escapeHtml(rider.id)}">Approve</button>
+          <button type="button" class="primary-button danger-button" data-user-action="reject-user" data-user-id="${escapeHtml(rider.id)}">Reject</button>
+          <button type="button" data-user-action="suspend-user" data-user-id="${escapeHtml(rider.id)}">Suspend</button>
+          <button type="button" data-user-action="delete-user" data-user-id="${escapeHtml(rider.id)}">Delete</button>
+        </div>
+      `
+    )}
   `;
 
   openDrawer();
@@ -1145,8 +1165,9 @@ function closeDocumentPreview() {
   }, 220);
 }
 
-function openRejectModal(driverId) {
-  state.pendingRejectDriverId = driverId;
+function openRejectModal(targetId, type = "driver") {
+  state.pendingRejectDriverId = type === "driver" ? targetId : null;
+  state.pendingRejectTarget = { id: targetId, type };
   if (elements.rejectReasonInput) elements.rejectReasonInput.value = "";
 
   document.body.classList.add("reject-modal-open");
@@ -1160,6 +1181,7 @@ function closeRejectModal() {
   document.body.classList.remove("reject-modal-open");
   elements.rejectReasonModal?.setAttribute("aria-hidden", "true");
   state.pendingRejectDriverId = null;
+  state.pendingRejectTarget = null;
 
   window.setTimeout(() => {
     if (!document.body.classList.contains("reject-modal-open")) {
@@ -1169,23 +1191,40 @@ function closeRejectModal() {
   }, 220);
 }
 
-function openConfirmModal({ eyebrow, title, message, confirmLabel, onConfirm }) {
+function openConfirmModal({ eyebrow, title, message, confirmLabel, onConfirm, reasonLabel, reasonPlaceholder, reasonRequired = false, defaultReason = "", isDanger = true }) {
   state.pendingConfirmAction = onConfirm;
   if (elements.confirmActionEyebrow) elements.confirmActionEyebrow.textContent = eyebrow;
   if (elements.confirmActionTitle) elements.confirmActionTitle.textContent = title;
   if (elements.confirmActionMessage) elements.confirmActionMessage.textContent = message;
-  if (elements.confirmActionButton) elements.confirmActionButton.textContent = confirmLabel;
+  if (elements.confirmActionButton) {
+    elements.confirmActionButton.textContent = confirmLabel;
+    elements.confirmActionButton.classList.toggle("danger-button", isDanger);
+  }
+  if (elements.confirmActionReasonField) elements.confirmActionReasonField.hidden = !reasonLabel;
+  if (elements.confirmActionReasonLabel) elements.confirmActionReasonLabel.textContent = reasonLabel || "Message for user";
+  if (elements.confirmActionReasonInput) {
+    elements.confirmActionReasonInput.value = defaultReason;
+    elements.confirmActionReasonInput.placeholder = reasonPlaceholder || "";
+    elements.confirmActionReasonInput.required = reasonRequired;
+    elements.confirmActionReasonInput.dataset.required = reasonRequired ? "true" : "false";
+  }
 
   document.body.classList.add("confirm-modal-open");
   elements.confirmActionBackdrop.hidden = false;
   elements.confirmActionModal.hidden = false;
   elements.confirmActionModal.setAttribute("aria-hidden", "false");
+  if (reasonLabel) elements.confirmActionReasonInput?.focus();
 }
 
 function closeConfirmModal() {
   document.body.classList.remove("confirm-modal-open");
   elements.confirmActionModal?.setAttribute("aria-hidden", "true");
   state.pendingConfirmAction = null;
+  if (elements.confirmActionReasonInput) {
+    elements.confirmActionReasonInput.value = "";
+    elements.confirmActionReasonInput.required = false;
+    elements.confirmActionReasonInput.dataset.required = "false";
+  }
 
   window.setTimeout(() => {
     if (!document.body.classList.contains("confirm-modal-open")) {
@@ -1217,54 +1256,222 @@ function getDriverRecord(driverId) {
   return state.users.find((user) => user.id === driverId && isDriver(user));
 }
 
-async function approveDriver(driverId) {
+function getUserRecord(userId) {
+  return state.users.find((user) => user.id === userId);
+}
+
+function defaultStatusMessage(type, status) {
+  const accountLabel = type === "driver" ? "driver account" : "account";
+
+  if (status === "approved") return `Your ${accountLabel} has been approved. You can now continue using MoveMate.`;
+  if (status === "rejected") return `Your ${accountLabel} was not approved.`;
+  if (status === "suspended") {
+    return `Your ${accountLabel} has been suspended due to activity that may be illegal, unsafe, fraudulent, abusive, or otherwise in violation of MoveMate's rules, terms, or applicable law. Please contact MoveMate support if you believe this was a mistake.`;
+  }
+
+  return `Your ${accountLabel} status has been updated.`;
+}
+
+function buildAccountStatusPayload({ type, status, message, reason, tools }) {
+  const cleanMessage = text(message, "").trim() || defaultStatusMessage(type, status);
+  const cleanReason = status === "rejected" ? text(reason, "").trim() : status === "suspended" ? cleanMessage : "";
+  const timestamp = tools.serverTimestamp();
+  const adminUser = tools.adminUser || tools.auth?.currentUser;
+  const approvalMessage = status === "approved" ? cleanMessage : "";
+  const rejectionMessage = status === "rejected" ? cleanMessage : "";
+  const rejectionReason = status === "rejected" ? cleanReason : "";
+  const suspensionMessage = status === "suspended" ? cleanMessage : "";
+  const suspensionReason = status === "suspended" ? cleanReason : "";
+
+  const payload = {
+    accountStatus: status,
+    userStatus: status,
+    currentStatusMessage: cleanMessage,
+    currentStatusReason: cleanReason,
+    statusMessage: cleanMessage,
+    statusReason: cleanReason,
+    alertStatus: status,
+    alertMessage: cleanMessage,
+    alertReason: cleanReason,
+    alertCreatedAt: timestamp,
+    hasAccountAlert: true,
+    accountStatusMessage: cleanMessage,
+    accountStatusReason: cleanReason,
+    accountAlertMessage: cleanMessage,
+    accountAlertReason: cleanReason,
+    accountAlertStatus: status,
+    accountAlertUnread: true,
+    accountStatusUpdatedAt: timestamp,
+    statusUpdatedAt: timestamp,
+    statusUpdatedBy: adminUser?.uid || state.adminId,
+    updatedAt: timestamp,
+    approvalMessage,
+    approvalReason: "",
+    rejectionMessage,
+    rejectionReason,
+    suspensionMessage,
+    suspensionReason
+  };
+
+  if (status === "approved") {
+    payload.approvedAt = timestamp;
+    payload.approvedBy = adminUser?.uid || state.adminId;
+  }
+
+  if (status === "rejected") {
+    payload.rejectedAt = timestamp;
+    payload.rejectedBy = adminUser?.uid || state.adminId;
+  }
+
+  if (status === "suspended") {
+    payload.suspendedAt = timestamp;
+    payload.suspendedBy = adminUser?.uid || state.adminId;
+  }
+
+  if (type === "driver") {
+    payload.driverStatus = status;
+    payload.driverStatusMessage = cleanMessage;
+    payload.driverStatusReason = cleanReason;
+    payload.verified_driver = status === "approved";
+    payload["driver_application.status"] = status;
+    payload["driver_application.review_note"] = cleanReason;
+    payload["driver_application.review_message"] = cleanMessage;
+    payload["driver_application.reviewed_at"] = timestamp;
+    payload["driver_application.reviewed_by"] = adminUser?.uid || state.adminId;
+
+    if (status === "approved") {
+      payload.driverApprovalMessage = cleanMessage;
+      payload.driverRejectionMessage = "";
+      payload.driverRejectionReason = "";
+      payload.driverSuspensionMessage = "";
+      payload.driverSuspensionReason = "";
+      payload["driver_application.approval_message"] = cleanMessage;
+      payload["driver_application.rejection_message"] = "";
+      payload["driver_application.rejection_reason"] = "";
+      payload["driver_application.suspension_message"] = "";
+      payload["driver_application.suspension_reason"] = "";
+    }
+
+    if (status === "rejected") {
+      payload.driverRejectionMessage = cleanMessage;
+      payload.driverRejectionReason = cleanReason;
+      payload.driverApprovalMessage = "";
+      payload.driverSuspensionMessage = "";
+      payload.driverSuspensionReason = "";
+      payload["driver_application.approval_message"] = "";
+      payload["driver_application.rejection_message"] = cleanMessage;
+      payload["driver_application.rejection_reason"] = cleanReason;
+      payload["driver_application.suspension_message"] = "";
+      payload["driver_application.suspension_reason"] = "";
+    }
+
+    if (status === "suspended") {
+      payload.driverSuspensionMessage = cleanMessage;
+      payload.driverSuspensionReason = cleanReason;
+      payload.driverApprovalMessage = "";
+      payload.driverRejectionMessage = "";
+      payload.driverRejectionReason = "";
+      payload["driver_application.approval_message"] = "";
+      payload["driver_application.rejection_message"] = "";
+      payload["driver_application.rejection_reason"] = "";
+      payload["driver_application.suspension_message"] = cleanMessage;
+      payload["driver_application.suspension_reason"] = cleanReason;
+    }
+  }
+
+  return payload;
+}
+
+async function updateAccountStatus({ userId, type, status, message, reason }) {
   const tools = state.firebaseTools;
   if (!tools?.db) {
     showToast("Firebase is still loading. Please try again.");
-    return;
+    return false;
+  }
+
+  if (status === "rejected" && !text(reason || message, "").trim()) {
+    showToast("Enter a rejection reason first.");
+    return false;
   }
 
   try {
-    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
-      driverStatus: "approved",
-      verified_driver: true,
-      "driver_application.status": "approved",
-      updatedAt: tools.serverTimestamp()
-    });
-    showToast("Driver approved successfully.");
+    await tools.updateDoc(
+      tools.doc(tools.db, "users", userId),
+      buildAccountStatusPayload({ type, status, message, reason, tools })
+    );
+    return true;
   } catch (error) {
-    console.error("Unable to approve driver:", error);
-    showToast("Could not approve driver. Check Firebase permissions.");
+    console.error(`Unable to ${status} ${type}:`, error);
+    showToast(`Could not ${status} ${type}. Check Firebase permissions.`);
+    return false;
   }
+}
+
+async function approveDriver(driverId) {
+  const saved = await updateAccountStatus({
+    userId: driverId,
+    type: "driver",
+    status: "approved"
+  });
+
+  if (saved) showToast("Driver approved successfully.");
 }
 
 async function rejectDriver(driverId, reason) {
-  const tools = state.firebaseTools;
-  if (!tools?.db) {
-    showToast("Firebase is still loading. Please try again.");
-    return;
-  }
+  const saved = await updateAccountStatus({
+    userId: driverId,
+    type: "driver",
+    status: "rejected",
+    message: reason,
+    reason
+  });
 
-  if (!reason.trim()) {
-    showToast("Enter a rejection reason first.");
-    return;
-  }
-
-  try {
-    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
-      driverStatus: "rejected",
-      "driver_application.status": "rejected",
-      "driver_application.review_note": reason.trim(),
-      updatedAt: tools.serverTimestamp()
-    });
-    showToast("Driver application rejected.");
-  } catch (error) {
-    console.error("Unable to reject driver:", error);
-    showToast("Could not reject driver. Check Firebase permissions.");
-  }
+  if (saved) showToast("Driver application rejected.");
 }
 
 async function suspendDriver(driverId) {
+  const saved = await updateAccountStatus({
+    userId: driverId,
+    type: "driver",
+    status: "suspended"
+  });
+
+  if (saved) showToast("Driver suspended.");
+}
+
+async function approveUser(userId) {
+  const saved = await updateAccountStatus({
+    userId,
+    type: "user",
+    status: "approved"
+  });
+
+  if (saved) showToast("User approved successfully.");
+}
+
+async function rejectUser(userId, reason) {
+  const saved = await updateAccountStatus({
+    userId,
+    type: "user",
+    status: "rejected",
+    message: reason,
+    reason
+  });
+
+  if (saved) showToast("User rejected.");
+}
+
+async function suspendUser(userId) {
+  const saved = await updateAccountStatus({
+    userId,
+    type: "user",
+    status: "suspended"
+  });
+
+  if (saved) showToast("User suspended.");
+}
+
+async function deleteUser(userId) {
   const tools = state.firebaseTools;
   if (!tools?.db) {
     showToast("Firebase is still loading. Please try again.");
@@ -1272,14 +1479,11 @@ async function suspendDriver(driverId) {
   }
 
   try {
-    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
-      driverStatus: "suspended",
-      updatedAt: tools.serverTimestamp()
-    });
-    showToast("Driver suspended.");
+    await tools.deleteDoc(tools.doc(tools.db, "users", userId));
+    showToast("User record deleted.");
   } catch (error) {
-    console.error("Unable to suspend driver:", error);
-    showToast("Could not suspend driver. Check Firebase permissions.");
+    console.error("Unable to delete user:", error);
+    showToast("Could not delete user. Check Firebase permissions.");
   }
 }
 
@@ -1311,7 +1515,14 @@ function handleDriverAction(action, driverId) {
   }
 
   if (action === "approve") {
-    approveDriver(driverId);
+    openConfirmModal({
+      eyebrow: "Approve driver",
+      title: "Approve this driver?",
+      message: "This will approve the driver in Firestore and save the standard approval message for the app.",
+      confirmLabel: "Approve Driver",
+      isDanger: false,
+      onConfirm: () => approveDriver(driverId)
+    });
     return;
   }
 
@@ -1324,7 +1535,7 @@ function handleDriverAction(action, driverId) {
     openConfirmModal({
       eyebrow: "Suspend driver",
       title: "Suspend this driver?",
-      message: "This will suspend the driver account in Firestore. The account will not be deleted.",
+      message: "This will suspend the driver account in Firestore and save the standard suspension message for the app.",
       confirmLabel: "Suspend Driver",
       onConfirm: () => suspendDriver(driverId)
     });
@@ -1338,6 +1549,52 @@ function handleDriverAction(action, driverId) {
       message: "This action cannot be undone. Only the Firestore user document will be deleted. Firebase Authentication and Storage files will remain for now.",
       confirmLabel: "Delete Driver",
       onConfirm: () => deleteDriver(driverId)
+    });
+  }
+}
+
+function handleUserAction(action, userId) {
+  const user = getUserRecord(userId);
+  if (!user) {
+    showToast("User record not found.");
+    return;
+  }
+
+  if (action === "approve-user") {
+    openConfirmModal({
+      eyebrow: "Approve user",
+      title: "Approve this user?",
+      message: "This will approve the user account in Firestore and save the standard approval message for the app.",
+      confirmLabel: "Approve User",
+      isDanger: false,
+      onConfirm: () => approveUser(userId)
+    });
+    return;
+  }
+
+  if (action === "reject-user") {
+    openRejectModal(userId, "user");
+    return;
+  }
+
+  if (action === "suspend-user") {
+    openConfirmModal({
+      eyebrow: "Suspend user",
+      title: "Suspend this user?",
+      message: "This will suspend the user account in Firestore and save the standard suspension message for the app.",
+      confirmLabel: "Suspend User",
+      onConfirm: () => suspendUser(userId)
+    });
+    return;
+  }
+
+  if (action === "delete-user") {
+    openConfirmModal({
+      eyebrow: "Delete user",
+      title: "Delete this user record?",
+      message: "This action cannot be undone. Only the Firestore user document will be deleted. Firebase Authentication and Storage files will remain for now.",
+      confirmLabel: "Delete User",
+      onConfirm: () => deleteUser(userId)
     });
   }
 }
@@ -1442,6 +1699,11 @@ function startAdminProfileListener(tools) {
   return tools.onAuthStateChanged(tools.auth, (user) => {
     if (unsubscribeProfile) unsubscribeProfile();
     tools.adminUser = user;
+    if (!user) {
+      state.admin = null;
+      renderAdminProfile();
+      return;
+    }
     unsubscribeProfile = listenToAdminProfile(tools);
   });
 }
@@ -1536,9 +1798,15 @@ function bindActions() {
     }
 
     const actionButton = event.target.closest("button[data-driver-action]");
-    if (!actionButton?.dataset.driverId) return;
+    if (actionButton?.dataset.driverId) {
+      handleDriverAction(actionButton.dataset.driverAction, actionButton.dataset.driverId);
+      return;
+    }
 
-    handleDriverAction(actionButton.dataset.driverAction, actionButton.dataset.driverId);
+    const userActionButton = event.target.closest("button[data-user-action]");
+    if (userActionButton?.dataset.userId) {
+      handleUserAction(userActionButton.dataset.userAction, userActionButton.dataset.userId);
+    }
   });
 
   elements.closeDocumentPreview?.addEventListener("click", closeDocumentPreview);
@@ -1548,16 +1816,20 @@ function bindActions() {
   elements.cancelRejectReason?.addEventListener("click", closeRejectModal);
   elements.rejectReasonBackdrop?.addEventListener("click", closeRejectModal);
   elements.confirmRejectReason?.addEventListener("click", async () => {
-    const driverId = state.pendingRejectDriverId;
+    const target = state.pendingRejectTarget || { id: state.pendingRejectDriverId, type: "driver" };
     const reason = elements.rejectReasonInput?.value || "";
-    if (!driverId) return;
+    if (!target.id) return;
 
     if (!reason.trim()) {
       showToast("Enter a rejection reason first.");
       return;
     }
 
-    await rejectDriver(driverId, reason);
+    if (target.type === "user") {
+      await rejectUser(target.id, reason);
+    } else {
+      await rejectDriver(target.id, reason);
+    }
     closeRejectModal();
   });
 
@@ -1566,8 +1838,17 @@ function bindActions() {
   elements.confirmActionBackdrop?.addEventListener("click", closeConfirmModal);
   elements.confirmActionButton?.addEventListener("click", async () => {
     const action = state.pendingConfirmAction;
+    const message = elements.confirmActionReasonInput?.value || "";
+    const requiresReason = elements.confirmActionReasonInput?.dataset.required === "true";
+
+    if (requiresReason && !message.trim()) {
+      showToast("Enter a reason first.");
+      elements.confirmActionReasonInput?.focus();
+      return;
+    }
+
     closeConfirmModal();
-    if (typeof action === "function") await action();
+    if (typeof action === "function") await action(message);
   });
 
   elements.riderTableBody?.addEventListener("click", (event) => {
@@ -1580,7 +1861,10 @@ function bindActions() {
       return;
     }
 
-    showToast("Coming in next phase");
+    const userId = button.dataset.userId;
+    if (!userId) return;
+
+    handleUserAction(button.dataset.action, userId);
   });
 
   elements.closeDrawer?.addEventListener("click", closeDriverDrawer);
@@ -1611,6 +1895,24 @@ function listenToCollection(db, collection, onSnapshot, name, stateKey) {
       showToast(`Could not load ${name}. Check Firebase permissions.`);
     }
   );
+}
+
+function waitForAuthenticatedUser(auth, onAuthStateChanged) {
+  if (!auth || !onAuthStateChanged) {
+    return Promise.resolve(null);
+  }
+
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user || null);
+    });
+  });
 }
 
 async function startRealtimeDashboard() {
@@ -1645,6 +1947,16 @@ async function startRealtimeDashboard() {
       uploadBytes,
       onAuthStateChanged
     };
+
+    const adminUser = await waitForAuthenticatedUser(auth, onAuthStateChanged);
+    state.firebaseTools.adminUser = adminUser;
+
+    if (!adminUser) {
+      showToast("Please sign in as an administrator to load the dashboard.");
+      setTableMessage(elements.driverMessage, "Sign in as an administrator to load registered drivers.", true);
+      setTableMessage(elements.riderMessage, "Sign in as an administrator to load registered riders.", true);
+      return;
+    }
 
     startAdminProfileListener(state.firebaseTools);
     listenToCollection(db, collection, onSnapshot, "trips", "trips");
