@@ -40,7 +40,10 @@ const state = {
   adminId: "movemate-admin",
   selectedAdminPhoto: null,
   selectedAdminPhotoPreview: null,
-  firebaseReady: false
+  firebaseReady: false,
+  openDriverId: null,
+  pendingRejectDriverId: null,
+  pendingConfirmAction: null
 };
 
 const elements = {
@@ -73,7 +76,26 @@ const elements = {
   adminModalEmail: document.getElementById("adminModalEmail"),
   adminModalRole: document.getElementById("adminModalRole"),
   adminModalPhone: document.getElementById("adminModalPhone"),
-  toast: document.getElementById("adminToast")
+  toast: document.getElementById("adminToast"),
+  documentPreviewBackdrop: document.getElementById("documentPreviewBackdrop"),
+  documentPreviewModal: document.getElementById("documentPreviewModal"),
+  documentPreviewTitle: document.getElementById("documentPreviewTitle"),
+  documentPreviewBody: document.getElementById("documentPreviewBody"),
+  closeDocumentPreview: document.getElementById("closeDocumentPreview"),
+  rejectReasonBackdrop: document.getElementById("rejectReasonBackdrop"),
+  rejectReasonModal: document.getElementById("rejectReasonModal"),
+  rejectReasonInput: document.getElementById("rejectReasonInput"),
+  closeRejectReason: document.getElementById("closeRejectReason"),
+  cancelRejectReason: document.getElementById("cancelRejectReason"),
+  confirmRejectReason: document.getElementById("confirmRejectReason"),
+  confirmActionBackdrop: document.getElementById("confirmActionBackdrop"),
+  confirmActionModal: document.getElementById("confirmActionModal"),
+  confirmActionEyebrow: document.getElementById("confirmActionEyebrow"),
+  confirmActionTitle: document.getElementById("confirmActionTitle"),
+  confirmActionMessage: document.getElementById("confirmActionMessage"),
+  closeConfirmAction: document.getElementById("closeConfirmAction"),
+  cancelConfirmAction: document.getElementById("cancelConfirmAction"),
+  confirmActionButton: document.getElementById("confirmActionButton")
 };
 
 const chartData = {
@@ -351,13 +373,29 @@ function formatRelativeTime(date) {
 }
 
 function badgeClass(status) {
+  return statusBadgeClass(status);
+}
+
+function statusBadgeClass(status) {
   const normalized = text(status, "").toLowerCase();
 
-  if (["verified", "approved", "active", "complete", "completed"].includes(normalized)) return "success";
-  if (["pending", "submitted", "review", "in review"].includes(normalized)) return "warning";
-  if (["rejected", "suspended", "blocked", "not verified"].includes(normalized)) return "danger";
+  if (["verified", "approved", "active", "complete", "completed", "true"].includes(normalized)) return "success";
+  if (["pending", "submitted", "review", "in review", "not verified", "false"].includes(normalized)) return "warning";
+  if (["rejected", "blocked"].includes(normalized)) return "danger";
+  if (["suspended"].includes(normalized)) return "muted";
 
   return "muted";
+}
+
+function verifiedDriverBadgeLabel(value) {
+  return value === true ? "Verified" : "Not Verified";
+}
+
+function isPdfUrl(url) {
+  if (!url) return false;
+
+  const normalized = String(url).split("?")[0].toLowerCase();
+  return normalized.endsWith(".pdf");
 }
 
 function formatBooleanStatus(value) {
@@ -531,6 +569,8 @@ async function importFirebaseHelpers() {
     doc: firestore.doc,
     onSnapshot: firestore.onSnapshot,
     setDoc: firestore.setDoc,
+    updateDoc: firestore.updateDoc,
+    deleteDoc: firestore.deleteDoc,
     serverTimestamp: firestore.serverTimestamp,
     ref: storage.ref,
     getDownloadURL: storage.getDownloadURL,
@@ -539,7 +579,8 @@ async function importFirebaseHelpers() {
   };
 }
 
-async function getProfilePhotoUrl(storage, storageRef, getDownloadURL, uid) {
+async function getProfilePhotoUrl(storage, storageRef, getDownloadURL, uid, profilePicUrl) {
+  if (profilePicUrl) return profilePicUrl;
   if (!uid) return defaultAvatar;
 
   try {
@@ -547,6 +588,17 @@ async function getProfilePhotoUrl(storage, storageRef, getDownloadURL, uid) {
   } catch (error) {
     return defaultAvatar;
   }
+}
+
+async function resolveDriverPhotoUrl(record, storageTools) {
+  const uid = record.uid || record.id;
+  return getProfilePhotoUrl(
+    storageTools.storage,
+    storageTools.storageRef,
+    storageTools.getDownloadURL,
+    uid,
+    record.profilePicUrl
+  );
 }
 
 function normalizeCollection(snapshot) {
@@ -702,20 +754,37 @@ function normalizeDriver(record, photoUrl) {
     email: text(record.email),
     phone: text(record.phone),
     whatsapp: text(record.whatsapp),
+    gender: text(record.gender || application.gender),
+    driverStatus: text(record.driverStatus, "Not provided"),
     verifiedDriver: record.verified_driver === true,
     verificationStatus: formatBooleanStatus(record.verified_driver),
     driverRating: record.driver_rating ?? "New",
     applicationStatus: text(application.status, "Not submitted"),
+    driverTier: text(application.driver_tier),
+    subscriptionTier: text(application.subscription_tier),
+    subscriptionAmount: text(application.subscription_amount),
     idNumber: text(application.id_number),
+    reviewNote: text(application.review_note),
     createdAt: formatDate(record.createdAt),
+    updatedAt: formatDate(record.updatedAt),
     submittedAt: formatDate(application.submitted_at),
+    resubmittedAt: formatDate(application.resubmitted_at),
     vehicleModel: text(vehicle.car_model || application.car_model),
     carColor: text(vehicle.car_color || application.car_color),
     numberPlate: text(vehicle.number_plate || application.number_plate),
     vehicleSeats: text(vehicle.vehicle_seats || application.vehicle_seats),
+    profilePicUrl: text(record.profilePicUrl, ""),
+    idDocumentUrl: text(application.id_document_url, ""),
+    proofOfPaymentUrl: text(application.proof_of_payment_url, ""),
+    selfieUrl: text(application.selfie_url, ""),
     photoUrl,
     raw: record
   };
+}
+
+async function buildNormalizedDriver(record, storageTools) {
+  const photoUrl = await resolveDriverPhotoUrl(record, storageTools);
+  return normalizeDriver(record, photoUrl);
 }
 
 function normalizeRider(record) {
@@ -741,16 +810,7 @@ async function renderDriverRows(storageTools) {
   }
 
   const drivers = await Promise.all(
-    state.drivers.map(async (record) => {
-      const uid = record.uid || record.id;
-      const photoUrl = await getProfilePhotoUrl(
-        storageTools.storage,
-        storageTools.storageRef,
-        storageTools.getDownloadURL,
-        uid
-      );
-      return normalizeDriver(record, photoUrl);
-    })
+    state.drivers.map(async (record) => buildNormalizedDriver(record, storageTools))
   );
 
   state.normalizedDrivers = drivers;
@@ -772,11 +832,11 @@ async function renderDriverRows(storageTools) {
           <td><span class="badge ${badgeClass(application)}">${escapeHtml(application)}</span></td>
           <td>${escapeHtml(driver.driverRating)}</td>
           <td class="action-cell">
-            <button type="button" data-action="view-driver" data-index="${index}">View</button>
-            <button type="button" data-action="approve">Approve</button>
-            <button type="button" data-action="reject">Reject</button>
-            <button type="button" data-action="suspend">Suspend</button>
-            <button type="button" data-action="delete">Delete</button>
+            <button type="button" data-action="view-driver" data-index="${index}" data-driver-id="${escapeHtml(driver.id)}">View</button>
+            <button type="button" data-action="approve" data-driver-id="${escapeHtml(driver.id)}">Approve</button>
+            <button type="button" data-action="reject" data-driver-id="${escapeHtml(driver.id)}">Reject</button>
+            <button type="button" data-action="suspend" data-driver-id="${escapeHtml(driver.id)}">Suspend</button>
+            <button type="button" data-action="delete" data-driver-id="${escapeHtml(driver.id)}">Delete</button>
           </td>
         </tr>
       `;
@@ -848,40 +908,173 @@ function rawDetailItems(raw) {
     .join("");
 }
 
+function drawerSection(title, content) {
+  return `
+    <section class="drawer-section" aria-label="${escapeHtml(title)}">
+      <h3 class="drawer-section-title">${escapeHtml(title)}</h3>
+      ${content}
+    </section>
+  `;
+}
+
+function statusBadgeItem(label, value, badgeValue) {
+  return `
+    <div class="status-badge-item">
+      <span>${escapeHtml(label)}</span>
+      <strong class="badge ${statusBadgeClass(badgeValue ?? value)}">${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function documentCard({ icon, title, url }) {
+  const hasUrl = Boolean(url && url !== "Not provided");
+
+  if (!hasUrl) {
+    return `
+      <article class="document-card">
+        <div class="document-card-head">${icon} ${escapeHtml(title)}</div>
+        <div class="document-preview-empty">Not provided</div>
+      </article>
+    `;
+  }
+
+  const isPdf = isPdfUrl(url);
+  const preview = isPdf
+    ? `<div class="document-preview document-preview-pdf"><i data-lucide="file-text"></i><span>PDF Document</span></div>`
+    : `<img class="document-preview" src="${escapeHtml(url)}" alt="${escapeHtml(title)} preview">`;
+
+  return `
+    <article class="document-card">
+      <div class="document-card-head">${icon} ${escapeHtml(title)}</div>
+      ${preview}
+      <div class="document-card-actions">
+        <button type="button" data-doc-action="preview" data-doc-url="${escapeHtml(url)}" data-doc-title="${escapeHtml(title)}" data-doc-type="${isPdf ? "pdf" : "image"}">Preview</button>
+        <button type="button" data-doc-action="open" data-doc-url="${escapeHtml(url)}">Open</button>
+        <button type="button" data-doc-action="download" data-doc-url="${escapeHtml(url)}" data-doc-filename="${escapeHtml(title)}">Download</button>
+      </div>
+    </article>
+  `;
+}
+
 function openDriverDrawer(driver) {
   if (!elements.drawer || !elements.drawerContent) return;
 
+  state.openDriverId = driver.id;
   elements.drawerType.textContent = "Driver profile";
   elements.drawerTitle.textContent = driver.fullName;
+
+  const verifiedLabel = verifiedDriverBadgeLabel(driver.verifiedDriver);
+
   elements.drawerContent.innerHTML = `
     <section class="driver-summary">
-      <img class="drawer-avatar" src="${driver.photoUrl}" alt="${escapeHtml(driver.fullName)}">
+      <img class="drawer-avatar" src="${escapeHtml(driver.photoUrl)}" alt="${escapeHtml(driver.fullName)}">
       <div>
         <h3>${escapeHtml(driver.fullName)}</h3>
         <p>${escapeHtml(driver.email)}</p>
         <p>${escapeHtml(driver.phone)}</p>
       </div>
     </section>
-    <section class="detail-grid" aria-label="Complete driver information">
-      ${detailItem("Full Name", driver.fullName)}
-      ${detailItem("Email", driver.email)}
-      ${detailItem("Phone", driver.phone)}
-      ${detailItem("WhatsApp", driver.whatsapp)}
-      ${detailItem("UID", driver.uid)}
-      ${detailItem("Driver Rating", driver.driverRating)}
-      ${detailItem("Verification Status", driver.verificationStatus)}
-      ${detailItem("Application Status", driver.applicationStatus)}
-      ${detailItem("Vehicle", driver.vehicleModel)}
-      ${detailItem("Car Colour", driver.carColor)}
-      ${detailItem("Number Plate", driver.numberPlate)}
-      ${detailItem("Vehicle Seats", driver.vehicleSeats)}
-      ${detailItem("ID Number", driver.idNumber)}
-      ${detailItem("Created Date", driver.createdAt)}
-      ${detailItem("Submitted Date", driver.submittedAt)}
-    </section>
+
+    ${drawerSection(
+      "Driver Status",
+      `
+        <div class="status-badges-row">
+          ${statusBadgeItem("Driver Status", driver.driverStatus, driver.driverStatus)}
+          ${statusBadgeItem("Verified Driver", verifiedLabel, driver.verifiedDriver ? "approved" : "pending")}
+          ${statusBadgeItem("Application Status", driver.applicationStatus, driver.applicationStatus)}
+        </div>
+      `
+    )}
+
+    ${drawerSection(
+      "Driver Profile",
+      `
+        <div class="detail-grid" aria-label="Driver profile information">
+          ${detailItem("Full Name", driver.fullName)}
+          ${detailItem("Email", driver.email)}
+          ${detailItem("Phone", driver.phone)}
+          ${detailItem("WhatsApp", driver.whatsapp)}
+          ${detailItem("UID", driver.uid)}
+          ${detailItem("Gender", driver.gender)}
+          ${detailItem("Driver Rating", driver.driverRating)}
+          ${detailItem("Verification Status", driver.verificationStatus)}
+          ${detailItem("Application Status", driver.applicationStatus)}
+          ${detailItem("Driver Status", driver.driverStatus)}
+          ${detailItem("Created Date", driver.createdAt)}
+          ${detailItem("Updated Date", driver.updatedAt)}
+        </div>
+      `
+    )}
+
+    ${drawerSection(
+      "Driver Application",
+      `
+        <div class="detail-grid" aria-label="Driver application information">
+          ${detailItem("Driver Tier", driver.driverTier)}
+          ${detailItem("Subscription Tier", driver.subscriptionTier)}
+          ${detailItem("Subscription Amount", driver.subscriptionAmount)}
+          ${detailItem("ID Number", driver.idNumber)}
+          ${detailItem("Application Status", driver.applicationStatus)}
+          ${detailItem("Submitted Date", driver.submittedAt)}
+          ${detailItem("Resubmitted Date", driver.resubmittedAt)}
+          ${detailItem("Review Note", driver.reviewNote)}
+        </div>
+      `
+    )}
+
+    ${drawerSection(
+      "Vehicle Information",
+      `
+        <div class="detail-grid" aria-label="Vehicle information">
+          ${detailItem("Vehicle", driver.vehicleModel)}
+          ${detailItem("Vehicle Colour", driver.carColor)}
+          ${detailItem("Number Plate", driver.numberPlate)}
+          ${detailItem("Vehicle Seats", driver.vehicleSeats)}
+        </div>
+      `
+    )}
+
+    ${drawerSection(
+      "Driver Documents",
+      `
+        <div class="document-grid" aria-label="Driver documents">
+          ${documentCard({ icon: "👤", title: "Profile Picture", url: driver.profilePicUrl })}
+          ${documentCard({ icon: "🪪", title: "ID Document", url: driver.idDocumentUrl })}
+          ${documentCard({ icon: "💵", title: "Proof of Payment", url: driver.proofOfPaymentUrl })}
+          ${documentCard({ icon: "📸", title: "Live Selfie", url: driver.selfieUrl })}
+        </div>
+      `
+    )}
+
+    ${drawerSection(
+      "Admin Actions",
+      `
+        <div class="drawer-action-buttons">
+          <button type="button" class="primary-button" data-driver-action="approve" data-driver-id="${escapeHtml(driver.id)}">Approve</button>
+          <button type="button" class="primary-button danger-button" data-driver-action="reject" data-driver-id="${escapeHtml(driver.id)}">Reject</button>
+          <button type="button" data-driver-action="suspend" data-driver-id="${escapeHtml(driver.id)}">Suspend</button>
+          <button type="button" data-driver-action="delete" data-driver-id="${escapeHtml(driver.id)}">Delete</button>
+        </div>
+      `
+    )}
   `;
 
+  if (window.lucide) window.lucide.createIcons();
   openDrawer();
+}
+
+async function refreshOpenDriverDrawer() {
+  if (!state.openDriverId || !state.firebaseTools) return;
+
+  const record = state.users.find((user) => user.id === state.openDriverId && isDriver(user));
+  if (!record) {
+    state.openDriverId = null;
+    closeDriverDrawer();
+    return;
+  }
+
+  const driver = await buildNormalizedDriver(record, state.firebaseTools);
+  openDriverDrawer(driver);
 }
 
 function openRiderDrawer(rider) {
@@ -915,12 +1108,238 @@ function openDrawer() {
 function closeDriverDrawer() {
   document.body.classList.remove("drawer-open");
   elements.drawer?.setAttribute("aria-hidden", "true");
+  state.openDriverId = null;
 
   window.setTimeout(() => {
     if (!document.body.classList.contains("drawer-open") && elements.drawerBackdrop) {
       elements.drawerBackdrop.hidden = true;
     }
   }, 220);
+}
+
+function openDocumentPreview(title, url, type) {
+  if (!elements.documentPreviewModal || !elements.documentPreviewBody) return;
+
+  elements.documentPreviewTitle.textContent = title;
+  elements.documentPreviewBody.innerHTML =
+    type === "pdf"
+      ? `<iframe src="${escapeHtml(url)}" title="${escapeHtml(title)}"></iframe>`
+      : `<img src="${escapeHtml(url)}" alt="${escapeHtml(title)}">`;
+
+  document.body.classList.add("document-preview-open");
+  elements.documentPreviewBackdrop.hidden = false;
+  elements.documentPreviewModal.hidden = false;
+  elements.documentPreviewModal.setAttribute("aria-hidden", "false");
+}
+
+function closeDocumentPreview() {
+  document.body.classList.remove("document-preview-open");
+  elements.documentPreviewModal?.setAttribute("aria-hidden", "true");
+
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("document-preview-open")) {
+      if (elements.documentPreviewBackdrop) elements.documentPreviewBackdrop.hidden = true;
+      if (elements.documentPreviewModal) elements.documentPreviewModal.hidden = true;
+      if (elements.documentPreviewBody) elements.documentPreviewBody.innerHTML = "";
+    }
+  }, 220);
+}
+
+function openRejectModal(driverId) {
+  state.pendingRejectDriverId = driverId;
+  if (elements.rejectReasonInput) elements.rejectReasonInput.value = "";
+
+  document.body.classList.add("reject-modal-open");
+  elements.rejectReasonBackdrop.hidden = false;
+  elements.rejectReasonModal.hidden = false;
+  elements.rejectReasonModal.setAttribute("aria-hidden", "false");
+  elements.rejectReasonInput?.focus();
+}
+
+function closeRejectModal() {
+  document.body.classList.remove("reject-modal-open");
+  elements.rejectReasonModal?.setAttribute("aria-hidden", "true");
+  state.pendingRejectDriverId = null;
+
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("reject-modal-open")) {
+      if (elements.rejectReasonBackdrop) elements.rejectReasonBackdrop.hidden = true;
+      if (elements.rejectReasonModal) elements.rejectReasonModal.hidden = true;
+    }
+  }, 220);
+}
+
+function openConfirmModal({ eyebrow, title, message, confirmLabel, onConfirm }) {
+  state.pendingConfirmAction = onConfirm;
+  if (elements.confirmActionEyebrow) elements.confirmActionEyebrow.textContent = eyebrow;
+  if (elements.confirmActionTitle) elements.confirmActionTitle.textContent = title;
+  if (elements.confirmActionMessage) elements.confirmActionMessage.textContent = message;
+  if (elements.confirmActionButton) elements.confirmActionButton.textContent = confirmLabel;
+
+  document.body.classList.add("confirm-modal-open");
+  elements.confirmActionBackdrop.hidden = false;
+  elements.confirmActionModal.hidden = false;
+  elements.confirmActionModal.setAttribute("aria-hidden", "false");
+}
+
+function closeConfirmModal() {
+  document.body.classList.remove("confirm-modal-open");
+  elements.confirmActionModal?.setAttribute("aria-hidden", "true");
+  state.pendingConfirmAction = null;
+
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("confirm-modal-open")) {
+      if (elements.confirmActionBackdrop) elements.confirmActionBackdrop.hidden = true;
+      if (elements.confirmActionModal) elements.confirmActionModal.hidden = true;
+    }
+  }, 220);
+}
+
+async function downloadDocument(url, filename) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename.replace(/\s+/g, "-").toLowerCase();
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    console.error("Unable to download document:", error);
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function getDriverRecord(driverId) {
+  return state.users.find((user) => user.id === driverId && isDriver(user));
+}
+
+async function approveDriver(driverId) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+
+  try {
+    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
+      driverStatus: "approved",
+      verified_driver: true,
+      "driver_application.status": "approved",
+      updatedAt: tools.serverTimestamp()
+    });
+    showToast("Driver approved successfully.");
+  } catch (error) {
+    console.error("Unable to approve driver:", error);
+    showToast("Could not approve driver. Check Firebase permissions.");
+  }
+}
+
+async function rejectDriver(driverId, reason) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+
+  if (!reason.trim()) {
+    showToast("Enter a rejection reason first.");
+    return;
+  }
+
+  try {
+    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
+      driverStatus: "rejected",
+      "driver_application.status": "rejected",
+      "driver_application.review_note": reason.trim(),
+      updatedAt: tools.serverTimestamp()
+    });
+    showToast("Driver application rejected.");
+  } catch (error) {
+    console.error("Unable to reject driver:", error);
+    showToast("Could not reject driver. Check Firebase permissions.");
+  }
+}
+
+async function suspendDriver(driverId) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+
+  try {
+    await tools.updateDoc(tools.doc(tools.db, "users", driverId), {
+      driverStatus: "suspended",
+      updatedAt: tools.serverTimestamp()
+    });
+    showToast("Driver suspended.");
+  } catch (error) {
+    console.error("Unable to suspend driver:", error);
+    showToast("Could not suspend driver. Check Firebase permissions.");
+  }
+}
+
+async function deleteDriver(driverId) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+
+  try {
+    await tools.deleteDoc(tools.doc(tools.db, "users", driverId));
+    if (state.openDriverId === driverId) {
+      state.openDriverId = null;
+      closeDriverDrawer();
+    }
+    showToast("Driver record deleted.");
+  } catch (error) {
+    console.error("Unable to delete driver:", error);
+    showToast("Could not delete driver. Check Firebase permissions.");
+  }
+}
+
+function handleDriverAction(action, driverId) {
+  const driver = getDriverRecord(driverId);
+  if (!driver) {
+    showToast("Driver record not found.");
+    return;
+  }
+
+  if (action === "approve") {
+    approveDriver(driverId);
+    return;
+  }
+
+  if (action === "reject") {
+    openRejectModal(driverId);
+    return;
+  }
+
+  if (action === "suspend") {
+    openConfirmModal({
+      eyebrow: "Suspend driver",
+      title: "Suspend this driver?",
+      message: "This will suspend the driver account in Firestore. The account will not be deleted.",
+      confirmLabel: "Suspend Driver",
+      onConfirm: () => suspendDriver(driverId)
+    });
+    return;
+  }
+
+  if (action === "delete") {
+    openConfirmModal({
+      eyebrow: "Delete driver",
+      title: "Delete this driver record?",
+      message: "This action cannot be undone. Only the Firestore user document will be deleted. Firebase Authentication and Storage files will remain for now.",
+      confirmLabel: "Delete Driver",
+      onConfirm: () => deleteDriver(driverId)
+    });
+  }
 }
 
 async function saveAdminProfilePhoto() {
@@ -1080,12 +1499,75 @@ function bindActions() {
     if (!button) return;
 
     if (button.dataset.action === "view-driver") {
-      const driver = state.normalizedDrivers?.[Number(button.dataset.index)];
+      const driver =
+        state.normalizedDrivers?.[Number(button.dataset.index)] ||
+        state.normalizedDrivers?.find((item) => item.id === button.dataset.driverId);
       if (driver) openDriverDrawer(driver);
       return;
     }
 
-    showToast("Coming in next phase");
+    const driverId = button.dataset.driverId;
+    if (!driverId) return;
+
+    handleDriverAction(button.dataset.action, driverId);
+  });
+
+  elements.drawerContent?.addEventListener("click", (event) => {
+    const docButton = event.target.closest("button[data-doc-action]");
+    if (docButton) {
+      const url = docButton.dataset.docUrl;
+      const title = docButton.dataset.docTitle || "Document";
+      const type = docButton.dataset.docType || "image";
+
+      if (docButton.dataset.docAction === "preview") {
+        openDocumentPreview(title, url, type);
+        return;
+      }
+
+      if (docButton.dataset.docAction === "open") {
+        window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      if (docButton.dataset.docAction === "download") {
+        downloadDocument(url, docButton.dataset.docFilename || "document");
+      }
+      return;
+    }
+
+    const actionButton = event.target.closest("button[data-driver-action]");
+    if (!actionButton?.dataset.driverId) return;
+
+    handleDriverAction(actionButton.dataset.driverAction, actionButton.dataset.driverId);
+  });
+
+  elements.closeDocumentPreview?.addEventListener("click", closeDocumentPreview);
+  elements.documentPreviewBackdrop?.addEventListener("click", closeDocumentPreview);
+
+  elements.closeRejectReason?.addEventListener("click", closeRejectModal);
+  elements.cancelRejectReason?.addEventListener("click", closeRejectModal);
+  elements.rejectReasonBackdrop?.addEventListener("click", closeRejectModal);
+  elements.confirmRejectReason?.addEventListener("click", async () => {
+    const driverId = state.pendingRejectDriverId;
+    const reason = elements.rejectReasonInput?.value || "";
+    if (!driverId) return;
+
+    if (!reason.trim()) {
+      showToast("Enter a rejection reason first.");
+      return;
+    }
+
+    await rejectDriver(driverId, reason);
+    closeRejectModal();
+  });
+
+  elements.closeConfirmAction?.addEventListener("click", closeConfirmModal);
+  elements.cancelConfirmAction?.addEventListener("click", closeConfirmModal);
+  elements.confirmActionBackdrop?.addEventListener("click", closeConfirmModal);
+  elements.confirmActionButton?.addEventListener("click", async () => {
+    const action = state.pendingConfirmAction;
+    closeConfirmModal();
+    if (typeof action === "function") await action();
   });
 
   elements.riderTableBody?.addEventListener("click", (event) => {
@@ -1108,6 +1590,9 @@ function bindActions() {
     if (event.key === "Escape") {
       closeAdminMenu();
       closeAdminProfileModal();
+      closeDocumentPreview();
+      closeRejectModal();
+      closeConfirmModal();
       closeDriverDrawer();
     }
   });
@@ -1136,6 +1621,8 @@ async function startRealtimeDashboard() {
       doc,
       onSnapshot,
       setDoc,
+      updateDoc,
+      deleteDoc,
       serverTimestamp,
       ref: storageRef,
       getDownloadURL,
@@ -1150,6 +1637,8 @@ async function startRealtimeDashboard() {
       doc,
       onSnapshot,
       setDoc,
+      updateDoc,
+      deleteDoc,
       serverTimestamp,
       storageRef,
       getDownloadURL,
@@ -1173,6 +1662,7 @@ async function startRealtimeDashboard() {
         renderLiveDashboard();
         await renderDriverRows(storageTools);
         renderRiderRows();
+        await refreshOpenDriverDrawer();
 
         if (window.lucide) {
           window.lucide.createIcons();

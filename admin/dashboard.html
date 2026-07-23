@@ -330,6 +330,63 @@
 
   <div class="toast" id="adminToast" role="status" aria-live="polite" hidden></div>
 
+  <div class="drawer-modal-backdrop" id="documentPreviewBackdrop" hidden></div>
+  <section class="document-preview-modal" id="documentPreviewModal" aria-label="Document preview" aria-hidden="true" hidden>
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Document preview</p>
+        <h2 id="documentPreviewTitle">Preview</h2>
+      </div>
+      <button class="icon-button" id="closeDocumentPreview" type="button" aria-label="Close document preview">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="document-preview-body" id="documentPreviewBody"></div>
+  </section>
+
+  <div class="drawer-modal-backdrop" id="rejectReasonBackdrop" hidden></div>
+  <section class="driver-action-modal" id="rejectReasonModal" aria-label="Reject driver application" aria-hidden="true" hidden>
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Reject application</p>
+        <h2>Rejection reason</h2>
+      </div>
+      <button class="icon-button" id="closeRejectReason" type="button" aria-label="Close rejection dialog">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="driver-action-modal-body">
+      <label class="modal-field" for="rejectReasonInput">
+        <span>Reason for rejection</span>
+        <textarea id="rejectReasonInput" rows="4" placeholder="Explain why this application is being rejected."></textarea>
+      </label>
+      <div class="drawer-action-buttons">
+        <button type="button" id="cancelRejectReason">Cancel</button>
+        <button class="primary-button danger-button" id="confirmRejectReason" type="button">Reject Driver</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="drawer-modal-backdrop" id="confirmActionBackdrop" hidden></div>
+  <section class="driver-action-modal" id="confirmActionModal" aria-label="Confirm action" aria-hidden="true" hidden>
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow" id="confirmActionEyebrow">Confirm action</p>
+        <h2 id="confirmActionTitle">Are you sure?</h2>
+      </div>
+      <button class="icon-button" id="closeConfirmAction" type="button" aria-label="Close confirmation dialog">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="driver-action-modal-body">
+      <p id="confirmActionMessage" class="confirm-action-message"></p>
+      <div class="drawer-action-buttons">
+        <button type="button" id="cancelConfirmAction">Cancel</button>
+        <button class="primary-button danger-button" id="confirmActionButton" type="button">Confirm</button>
+      </div>
+    </div>
+  </section>
+
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="JS/components.js"></script>
   <script type="module" src="JS/dashboard.js"></script>
