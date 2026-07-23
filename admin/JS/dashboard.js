@@ -614,7 +614,11 @@ function normalizeCollection(snapshot) {
 }
 
 function isDriver(user) {
-  return text(user.role, "").toLowerCase() === "driver";
+  const role = text(user.role, "").toLowerCase();
+  const application = user.driver_application;
+  const hasDriverApplication = application && typeof application === "object";
+
+  return role === "driver" || hasDriverApplication;
 }
 
 function isRider(user) {
@@ -1341,6 +1345,7 @@ function buildAccountStatusPayload({ type, status, message, reason, tools }) {
     payload["driver_application.reviewed_by"] = adminUser?.uid || state.adminId;
 
     if (status === "approved") {
+      payload.role = "driver";
       payload.driverApprovalMessage = cleanMessage;
       payload.driverRejectionMessage = "";
       payload.driverRejectionReason = "";
