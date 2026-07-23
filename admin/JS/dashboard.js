@@ -17,6 +17,7 @@ const firebaseConfigPaths = [
 
 const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date"];
 const riderRoles = ["rider", "passenger"];
+const requireAdminAuthForDashboard = false;
 
 const defaultAvatar =
   "data:image/svg+xml;charset=UTF-8," +
@@ -1699,11 +1700,6 @@ function startAdminProfileListener(tools) {
   return tools.onAuthStateChanged(tools.auth, (user) => {
     if (unsubscribeProfile) unsubscribeProfile();
     tools.adminUser = user;
-    if (!user) {
-      state.admin = null;
-      renderAdminProfile();
-      return;
-    }
     unsubscribeProfile = listenToAdminProfile(tools);
   });
 }
@@ -1948,14 +1944,16 @@ async function startRealtimeDashboard() {
       onAuthStateChanged
     };
 
-    const adminUser = await waitForAuthenticatedUser(auth, onAuthStateChanged);
-    state.firebaseTools.adminUser = adminUser;
+    if (requireAdminAuthForDashboard) {
+      const adminUser = await waitForAuthenticatedUser(auth, onAuthStateChanged);
+      state.firebaseTools.adminUser = adminUser;
 
-    if (!adminUser) {
-      showToast("Please sign in as an administrator to load the dashboard.");
-      setTableMessage(elements.driverMessage, "Sign in as an administrator to load registered drivers.", true);
-      setTableMessage(elements.riderMessage, "Sign in as an administrator to load registered riders.", true);
-      return;
+      if (!adminUser) {
+        showToast("Please sign in as an administrator to load the dashboard.");
+        setTableMessage(elements.driverMessage, "Sign in as an administrator to load registered drivers.", true);
+        setTableMessage(elements.riderMessage, "Sign in as an administrator to load registered riders.", true);
+        return;
+      }
     }
 
     startAdminProfileListener(state.firebaseTools);
