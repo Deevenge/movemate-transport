@@ -17,7 +17,7 @@ const firebaseConfigPaths = [
 
 const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date"];
 const riderRoles = ["rider", "passenger"];
-const requireAdminAuthForDashboard = false;
+const requireAdminAuthForDashboard = true;
 
 const defaultAvatar =
   "data:image/svg+xml;charset=UTF-8," +
@@ -580,7 +580,9 @@ async function importFirebaseHelpers() {
     ref: storage.ref,
     getDownloadURL: storage.getDownloadURL,
     uploadBytes: storage.uploadBytes,
-    onAuthStateChanged: auth.onAuthStateChanged
+    getIdTokenResult: auth.getIdTokenResult,
+    onAuthStateChanged: auth.onAuthStateChanged,
+    signOut: auth.signOut
   };
 }
 
@@ -1728,6 +1730,12 @@ function bindActions() {
     const button = event.target.closest("button[data-admin-menu]");
     if (!button) return;
 
+    if (button.dataset.adminMenu === "logout") {
+      closeAdminMenu();
+      handleAdminLogout();
+      return;
+    }
+
     if (button.dataset.adminMenu === "profile") {
       openAdminProfileModal();
       return;
@@ -1736,6 +1744,8 @@ function bindActions() {
     closeAdminMenu();
     showToast("Coming Soon");
   });
+
+  document.querySelector(".sidebar-footer [data-admin-menu='logout']")?.addEventListener("click", handleAdminLogout);
 
   elements.closeAdminProfile?.addEventListener("click", closeAdminProfileModal);
   elements.adminProfileBackdrop?.addEventListener("click", closeAdminProfileModal);
@@ -1916,6 +1926,37 @@ function waitForAuthenticatedUser(auth, onAuthStateChanged) {
   });
 }
 
+async function handleAdminLogout() {
+  try {
+    if (state.firebaseTools?.auth && state.firebaseTools?.signOut) {
+      await state.firebaseTools.signOut(state.firebaseTools.auth);
+    }
+  } catch (error) {
+    console.error("Unable to sign out administrator:", error);
+  } finally {
+    window.location.replace("login.html");
+  }
+}
+
+async function verifyAdminDashboardAccess(tools) {
+  const adminUser = await waitForAuthenticatedUser(tools.auth, tools.onAuthStateChanged);
+  tools.adminUser = adminUser;
+
+  if (!adminUser) {
+    window.location.replace("login.html");
+    return false;
+  }
+
+  const token = await tools.getIdTokenResult(adminUser, true);
+  if (token.claims.admin !== true) {
+    await tools.signOut(tools.auth);
+    window.location.replace("login.html?denied=1");
+    return false;
+  }
+
+  return true;
+}
+
 async function startRealtimeDashboard() {
   try {
     const { db, storage, auth } = await importExistingFirebaseConfig();
@@ -1930,6 +1971,8 @@ async function startRealtimeDashboard() {
       ref: storageRef,
       getDownloadURL,
       uploadBytes,
+      getIdTokenResult,
+      signOut,
       onAuthStateChanged
     } = await importFirebaseHelpers();
     const storageTools = { storage, storageRef, getDownloadURL };
@@ -1946,17 +1989,14 @@ async function startRealtimeDashboard() {
       storageRef,
       getDownloadURL,
       uploadBytes,
+      getIdTokenResult,
+      signOut,
       onAuthStateChanged
     };
 
     if (requireAdminAuthForDashboard) {
-      const adminUser = await waitForAuthenticatedUser(auth, onAuthStateChanged);
-      state.firebaseTools.adminUser = adminUser;
-
-      if (!adminUser) {
-        showToast("Please sign in as an administrator to load the dashboard.");
-        setTableMessage(elements.driverMessage, "Sign in as an administrator to load registered drivers.", true);
-        setTableMessage(elements.riderMessage, "Sign in as an administrator to load registered riders.", true);
+      const canLoadDashboard = await verifyAdminDashboardAccess(state.firebaseTools);
+      if (!canLoadDashboard) {
         return;
       }
     }

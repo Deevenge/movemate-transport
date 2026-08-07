@@ -2,6 +2,117 @@
   min-height: 100vh;
 }
 
+.admin-login-body {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(24, 198, 216, 0.15), transparent 28%),
+    linear-gradient(135deg, #f8fafc 0%, #eef6f8 48%, #f9fafb 100%);
+}
+
+.admin-login-shell {
+  width: min(100%, 440px);
+}
+
+.admin-login-card {
+  display: grid;
+  gap: 28px;
+  padding: 32px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-md);
+}
+
+.admin-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-login-brand strong,
+.admin-login-brand small {
+  display: block;
+}
+
+.admin-login-brand strong {
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.admin-login-brand small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.admin-login-copy .eyebrow {
+  margin-bottom: 14px;
+}
+
+.admin-login-copy h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 2.6rem);
+  line-height: 1;
+}
+
+.admin-login-form {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-login-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.admin-login-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 14px;
+  color: var(--text);
+  background: #fff;
+  outline: 0;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+
+.admin-login-form input:focus {
+  border-color: rgba(24, 198, 216, 0.72);
+  box-shadow: 0 0 0 4px rgba(24, 198, 216, 0.12);
+}
+
+.admin-login-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.admin-login-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.admin-login-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.admin-login-message.is-error {
+  color: var(--danger);
+}
+
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;

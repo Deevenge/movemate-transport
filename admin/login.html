@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="MoveMate Transport administrator login.">
+  <title>MoveMate Admin Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="CSS/components.css">
+  <link rel="stylesheet" href="CSS/dashboard.css">
+</head>
+<body class="admin-login-body">
+  <main class="admin-login-shell">
+    <section class="admin-login-card" aria-label="Administrator sign in">
+      <a class="admin-login-brand" href="login.html" aria-label="MoveMate Admin Login">
+        <span class="brand-emblem">
+          <img src="../images/logo.jpg" alt="MoveMate logo">
+        </span>
+        <span>
+          <strong>MoveMate</strong>
+          <small>Admin Dashboard</small>
+        </span>
+      </a>
+
+      <div class="admin-login-copy">
+        <p class="eyebrow">Secure access</p>
+        <h1>Administrator Login</h1>
+      </div>
+
+      <form class="admin-login-form" id="adminLoginForm">
+        <label>
+          <span>Email Address</span>
+          <input id="adminEmail" type="email" value="admin@kentronix.co.za" autocomplete="username" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input id="adminPassword" type="password" autocomplete="current-password" required autofocus>
+        </label>
+        <p class="admin-login-message" id="adminLoginMessage" role="status" aria-live="polite" hidden></p>
+        <button class="primary-button admin-login-button" id="adminLoginButton" type="submit">Sign In</button>
+      </form>
+    </section>
+  </main>
+
+  <script type="module" src="JS/login.js"></script>
+</body>
+</html>
