@@ -324,11 +324,12 @@ h3 {
   line-height: 1.12;
 }
 
-.android-download {
+.store-btn.android-download {
   min-width: 232px;
   gap: 13px;
   color: #ffffff;
   border-color: rgba(110, 242, 177, 0.4);
+  background-color: #087469;
   background:
     radial-gradient(circle at 92% 8%, rgba(110, 242, 177, 0.33), transparent 36%),
     linear-gradient(135deg, #123d37, #087469 58%, #0a9d7f);
