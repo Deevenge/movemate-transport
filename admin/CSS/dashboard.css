@@ -713,6 +713,7 @@ canvas {
 .queue-icon.amber { color: #b45309; background: #fef3c7; }
 .queue-icon.green { color: #15803d; background: #dcfce7; }
 .queue-icon.red { color: #dc2626; background: #fee2e2; }
+.queue-icon.cyan { color: var(--primary-dark); background: var(--primary-soft); }
 
 .driver-toolbar {
   display: flex;
@@ -756,6 +757,10 @@ table {
 }
 
 .driver-workspace table { min-width: 940px; }
+.trip-workspace { padding: 24px; }
+.trip-workspace table { min-width: 760px; }
+.route-copy { display: inline-flex; align-items: center; gap: 7px; min-width: 240px; color: #334155; }
+.route-copy svg { width: 14px; color: var(--primary-dark); }
 
 th,
 td {
@@ -1199,14 +1204,16 @@ body.drawer-open .driver-drawer {
 
 body.document-preview-open .drawer-modal-backdrop,
 body.reject-modal-open .drawer-modal-backdrop,
-body.confirm-modal-open .drawer-modal-backdrop {
+body.confirm-modal-open .drawer-modal-backdrop,
+body.announcement-modal-open .drawer-modal-backdrop {
   opacity: 1;
   pointer-events: auto;
 }
 
 body.document-preview-open .document-preview-modal,
 body.reject-modal-open .driver-action-modal#rejectReasonModal,
-body.confirm-modal-open .driver-action-modal#confirmActionModal {
+body.confirm-modal-open .driver-action-modal#confirmActionModal,
+body.announcement-modal-open .driver-action-modal#announcementModal {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%);
@@ -1257,6 +1264,22 @@ body.confirm-modal-open .driver-action-modal#confirmActionModal {
   border-radius: var(--radius-md);
   font: inherit;
   resize: vertical;
+}
+
+.modal-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+
+.modal-field input:focus,
+.modal-field textarea:focus {
+  outline: 0;
+  border-color: rgba(24, 198, 216, 0.72);
+  box-shadow: 0 0 0 4px rgba(24, 198, 216, 0.12);
 }
 
 .confirm-action-message {
@@ -1515,4 +1538,14 @@ body.nav-open .sidebar {
   .driver-workspace .action-cell::before { display: none; }
   .driver-workspace .action-cell button { min-height: 38px; }
   .driver-workspace .skeleton-row { display: none; }
+
+  .trip-workspace { padding: 16px; }
+  .trip-workspace .table-scroll { overflow: visible; }
+  .trip-workspace table, .trip-workspace tbody, .trip-workspace tr, .trip-workspace td { display: block; width: 100%; min-width: 0; }
+  .trip-workspace thead { display: none; }
+  .trip-workspace tbody { display: grid; gap: 12px; }
+  .trip-workspace tbody tr { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: var(--shadow-sm); }
+  .trip-workspace td { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; padding: 10px 14px; border-bottom: 1px solid #edf2f7; text-align: right; }
+  .trip-workspace td::before { content: attr(data-label); flex: 0 0 76px; color: var(--muted); text-align: left; font-size: 0.68rem; font-weight: 900; text-transform: uppercase; }
+  .trip-workspace .route-copy { justify-content: flex-end; min-width: 0; text-align: right; }
 }

@@ -15,7 +15,7 @@ const firebaseConfigPaths = [
   "../../firebase-config.js"
 ];
 
-const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date"];
+const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date", "trip_datetime", "tripDateTime"];
 const riderRoles = ["rider", "passenger"];
 const requireAdminAuthForDashboard = true;
 
@@ -47,6 +47,7 @@ const state = {
   pendingRejectTarget: null,
   pendingConfirmAction: null,
   driverFilter: "applications",
+  tripFilter: "enroute",
   searchQuery: ""
 };
 
@@ -61,6 +62,10 @@ const elements = {
   globalSearch: document.getElementById("globalSearch"),
   driverResultsCopy: document.getElementById("driverResultsCopy"),
   driverFilterButtons: document.querySelectorAll("[data-driver-filter]"),
+  tripTableBody: document.getElementById("tripsTableBody"),
+  tripMessage: document.getElementById("tripsTableMessage"),
+  tripResultsCopy: document.getElementById("tripResultsCopy"),
+  tripFilterButtons: document.querySelectorAll("[data-trip-filter]"),
   drawer: document.getElementById("driverDrawer"),
   drawerBackdrop: document.getElementById("driverDrawerBackdrop"),
   drawerType: document.getElementById("drawerProfileType"),
@@ -105,7 +110,14 @@ const elements = {
   confirmActionReasonInput: document.getElementById("confirmActionReasonInput"),
   closeConfirmAction: document.getElementById("closeConfirmAction"),
   cancelConfirmAction: document.getElementById("cancelConfirmAction"),
-  confirmActionButton: document.getElementById("confirmActionButton")
+  confirmActionButton: document.getElementById("confirmActionButton"),
+  announcementBackdrop: document.getElementById("announcementBackdrop"),
+  announcementModal: document.getElementById("announcementModal"),
+  closeAnnouncement: document.getElementById("closeAnnouncement"),
+  cancelAnnouncement: document.getElementById("cancelAnnouncement"),
+  announcementTitleInput: document.getElementById("announcementTitleInput"),
+  announcementMessageInput: document.getElementById("announcementMessageInput"),
+  sendAnnouncement: document.getElementById("sendAnnouncement")
 };
 
 const chartData = {
@@ -390,7 +402,7 @@ function statusBadgeClass(status) {
   const normalized = text(status, "").toLowerCase();
 
   if (["verified", "approved", "active", "complete", "completed", "true"].includes(normalized)) return "success";
-  if (["pending", "submitted", "review", "in review", "not verified", "false"].includes(normalized)) return "warning";
+  if (["en route", "enroute", "in progress", "ongoing", "matched", "accepted", "assigned", "pending", "submitted", "review", "in review", "not verified", "false"].includes(normalized)) return "warning";
   if (["rejected", "blocked"].includes(normalized)) return "danger";
   if (["suspended"].includes(normalized)) return "muted";
 
@@ -757,6 +769,92 @@ function renderLiveDashboard() {
   updateCharts();
   updateActivity();
   updateOperationsCopy();
+  renderTripRows();
+}
+
+function displayLocation(value) {
+  if (!value) return "Not provided";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") return text(value.address || value.name || value.label || value.description || value.location, "Not provided");
+  return text(value);
+}
+
+function findUserName(id) {
+  if (!id) return "Not assigned";
+  const user = state.users.find((item) => item.id === id || item.uid === id);
+  return text(user?.fullName || user?.name || user?.displayName, "Not provided");
+}
+
+function normalizeTripRecord(record, type) {
+  const status = text(record.tripStatus || record.trip_status || record.status || record.requestStatus || record.request_status, type === "request" ? "Pending" : "Unknown");
+  const driverId = record.driverId || record.driver_id || record.matchedDriverId || record.matched_driver_id || record.acceptedBy || record.accepted_by || record.driver?.id || record.driver?.uid;
+  const passengerId = record.passengerId || record.passenger_id || record.riderId || record.rider_id || record.userId || record.user_id || record.customerId || record.customer_id;
+  return {
+    id: record.id,
+    type,
+    status,
+    driver: text(record.driverName || record.driver_name || record.driver?.name, findUserName(driverId)),
+    passenger: text(record.passengerName || record.passenger_name || record.riderName || record.rider_name || record.customerName, findUserName(passengerId)),
+    pickup: displayLocation(record.pickupLocation || record.pickup_location || record.pickup || record.origin || record.from_location || record.from),
+    destination: displayLocation(record.destination || record.dropoffLocation || record.dropoff_location || record.dropoff || record.to_location || record.to),
+    date: getRecordDate(record),
+    raw: record
+  };
+}
+
+function tripCategory(item) {
+  const status = item.status.toLowerCase().replace(/[ _-]/g, "");
+  if (item.type === "request" && (status.includes("match") || status.includes("accept") || status.includes("assign") || item.driver !== "Not assigned")) return "matched";
+  if (status.includes("complete") || status.includes("finish") || status.includes("ended")) return "completed";
+  if (status.includes("enroute") || status.includes("progress") || status.includes("ongoing") || status.includes("started") || status.includes("active")) return "enroute";
+  return "other";
+}
+
+function tripFilterLabel() {
+  return { enroute: "en route trips", completed: "completed trips", matched: "matched requests", all: "trip activity" }[state.tripFilter] || "trip activity";
+}
+
+function renderTripRows() {
+  if (!elements.tripTableBody) return;
+  const items = [
+    ...state.trips.map((record) => normalizeTripRecord(record, "trip")),
+    ...state.rideRequests.map((record) => normalizeTripRecord(record, "request"))
+  ].sort((a, b) => (b.date || 0) - (a.date || 0));
+  const counts = items.reduce((total, item) => { const category = tripCategory(item); if (category in total) total[category] += 1; return total; }, { enroute: 0, completed: 0, matched: 0 });
+  const values = { enrouteTripsCount: counts.enroute, completedTripsCount: counts.completed, matchedRequestsCount: counts.matched, enrouteTripsTabCount: counts.enroute, completedTripsTabCount: counts.completed, matchedRequestsTabCount: counts.matched, allTripsTabCount: items.length };
+  Object.entries(values).forEach(([id, value]) => { const element = document.getElementById(id); if (element) element.textContent = value; });
+  const filtered = items.filter((item) => {
+    const categoryMatches = state.searchQuery || state.tripFilter === "all" || tripCategory(item) === state.tripFilter;
+    const haystack = [item.status, item.driver, item.passenger, item.pickup, item.destination].join(" ").toLowerCase();
+    return categoryMatches && haystack.includes(state.searchQuery.toLowerCase());
+  });
+  if (elements.tripResultsCopy) elements.tripResultsCopy.textContent = `${filtered.length} ${filtered.length === 1 ? "result" : "results"}${state.searchQuery ? ` for “${state.searchQuery}”` : ""}`;
+  if (!filtered.length) {
+    elements.tripTableBody.innerHTML = "";
+    setTableMessage(elements.tripMessage, `No ${tripFilterLabel()} found${state.searchQuery ? ` matching “${state.searchQuery}”` : ""}.`);
+    return;
+  }
+  hideTableMessage(elements.tripMessage);
+  elements.tripTableBody.innerHTML = filtered.map((item) => `
+    <tr>
+      <td data-label="Status"><span class="badge ${badgeClass(item.status)}">${escapeHtml(item.status)}</span></td>
+      <td data-label="Driver"><strong>${escapeHtml(item.driver)}</strong></td>
+      <td data-label="Passenger"><strong>${escapeHtml(item.passenger)}</strong></td>
+      <td data-label="Route"><span class="route-copy">${escapeHtml(item.pickup)} <i data-lucide="arrow-right"></i> ${escapeHtml(item.destination)}</span></td>
+      <td data-label="Updated">${escapeHtml(formatDate(item.date))}</td>
+    </tr>`).join("");
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function setTripFilter(filter) {
+  state.tripFilter = filter;
+  elements.tripFilterButtons.forEach((button) => {
+    const active = button.dataset.tripFilter === filter;
+    button.classList.toggle("active", active);
+    if (button.getAttribute("role") === "tab") button.setAttribute("aria-selected", String(active));
+  });
+  renderTripRows();
+  document.getElementById("trips")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function normalizeDriver(record, photoUrl) {
@@ -1307,6 +1405,75 @@ function closeConfirmModal() {
   }, 220);
 }
 
+function openAnnouncementModal() {
+  document.body.classList.add("announcement-modal-open");
+  elements.announcementBackdrop.hidden = false;
+  elements.announcementModal.hidden = false;
+  elements.announcementModal.setAttribute("aria-hidden", "false");
+  elements.announcementTitleInput?.focus();
+}
+
+function closeAnnouncementModal() {
+  document.body.classList.remove("announcement-modal-open");
+  elements.announcementModal?.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("announcement-modal-open")) {
+      if (elements.announcementBackdrop) elements.announcementBackdrop.hidden = true;
+      if (elements.announcementModal) elements.announcementModal.hidden = true;
+    }
+  }, 220);
+}
+
+function isActiveDriverForAnnouncement(user) {
+  if (!isDriver(user)) return false;
+  const status = text(user.driverStatus || user.accountStatus || user.status, "").toLowerCase();
+  const applicationStatus = text(user.driver_application?.status, "").toLowerCase();
+  if (status.includes("suspend") || status.includes("reject") || applicationStatus.includes("suspend") || applicationStatus.includes("reject")) return false;
+  return user.verified_driver === true || ["approved", "active"].includes(status) || applicationStatus.includes("approv");
+}
+
+async function sendAnnouncementToActiveDrivers(title, message) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+  const drivers = state.users.filter(isActiveDriverForAnnouncement);
+  if (!drivers.length) {
+    showToast("No active drivers were found.");
+    return;
+  }
+  const announcementId = `announcement-${Date.now()}`;
+  const sender = tools.adminUser?.uid || tools.auth?.currentUser?.uid || state.adminId;
+  if (elements.sendAnnouncement) {
+    elements.sendAnnouncement.disabled = true;
+    elements.sendAnnouncement.textContent = "Sending…";
+  }
+  try {
+    const results = await Promise.allSettled(drivers.map((driver) => tools.updateDoc(tools.doc(tools.db, "users", driver.id), {
+      driverAnnouncementId: announcementId,
+      driverAnnouncementTitle: title,
+      driverAnnouncementMessage: `Hi ${text(driver.fullName || driver.name || driver.displayName, "Driver").split(/\s+/)[0]},\n\n${message}`,
+      driverAnnouncementUnread: true,
+      driverAnnouncementCreatedAt: tools.serverTimestamp(),
+      driverAnnouncementSentBy: sender,
+      updatedAt: tools.serverTimestamp()
+    })));
+    const sent = results.filter((result) => result.status === "fulfilled").length;
+    if (sent === drivers.length) showToast(`Announcement sent to ${sent} active drivers.`);
+    else showToast(`Announcement sent to ${sent} of ${drivers.length} drivers. Check Firebase permissions.`);
+  } catch (error) {
+    console.error("Unable to send driver announcement:", error);
+    showToast("Could not send the announcement. Check Firebase permissions.");
+  } finally {
+    if (elements.sendAnnouncement) {
+      elements.sendAnnouncement.disabled = false;
+      elements.sendAnnouncement.innerHTML = `<i data-lucide="send"></i>Send to active drivers`;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+}
+
 async function downloadDocument(url, filename) {
   try {
     const response = await fetch(url);
@@ -1784,6 +1951,7 @@ function bindActions() {
       const storageTools = { storage: state.firebaseTools.storage, storageRef: state.firebaseTools.storageRef, getDownloadURL: state.firebaseTools.getDownloadURL };
       renderDriverRows(storageTools);
       renderRiderRows();
+      renderTripRows();
     }
   });
 
@@ -1791,8 +1959,34 @@ function bindActions() {
     button.addEventListener("click", () => setDriverFilter(button.dataset.driverFilter));
   });
 
+  elements.tripFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => setTripFilter(button.dataset.tripFilter));
+  });
+
   document.querySelectorAll("[data-jump-to]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.jumpTo)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  });
+
+  document.querySelectorAll("[data-open-announcement]").forEach((button) => button.addEventListener("click", openAnnouncementModal));
+  elements.closeAnnouncement?.addEventListener("click", closeAnnouncementModal);
+  elements.cancelAnnouncement?.addEventListener("click", closeAnnouncementModal);
+  elements.announcementBackdrop?.addEventListener("click", closeAnnouncementModal);
+  elements.sendAnnouncement?.addEventListener("click", () => {
+    const title = elements.announcementTitleInput?.value.trim() || "";
+    const message = elements.announcementMessageInput?.value.trim() || "";
+    if (!title || !message) {
+      showToast("Enter an announcement title and message first.");
+      return;
+    }
+    closeAnnouncementModal();
+    openConfirmModal({
+      eyebrow: "Send announcement",
+      title: "Send this to all active drivers?",
+      message: `${title}\n\nThis will be delivered to ${state.users.filter(isActiveDriverForAnnouncement).length} active driver accounts.`,
+      confirmLabel: "Send announcement",
+      isDanger: false,
+      onConfirm: () => sendAnnouncementToActiveDrivers(title, message)
+    });
   });
 
   elements.adminProfileToggle?.addEventListener("click", toggleAdminMenu);
@@ -1971,6 +2165,7 @@ function bindActions() {
       closeDocumentPreview();
       closeRejectModal();
       closeConfirmModal();
+      closeAnnouncementModal();
       closeDriverDrawer();
     }
   });
