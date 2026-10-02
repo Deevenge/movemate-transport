@@ -45,7 +45,9 @@ const state = {
   openDriverId: null,
   pendingRejectDriverId: null,
   pendingRejectTarget: null,
-  pendingConfirmAction: null
+  pendingConfirmAction: null,
+  driverFilter: "applications",
+  searchQuery: ""
 };
 
 const elements = {
@@ -56,6 +58,9 @@ const elements = {
   driverMessage: document.getElementById("driversTableMessage"),
   riderTableBody: document.getElementById("ridersTableBody"),
   riderMessage: document.getElementById("ridersTableMessage"),
+  globalSearch: document.getElementById("globalSearch"),
+  driverResultsCopy: document.getElementById("driverResultsCopy"),
+  driverFilterButtons: document.querySelectorAll("[data-driver-filter]"),
   drawer: document.getElementById("driverDrawer"),
   drawerBackdrop: document.getElementById("driverDrawerBackdrop"),
   drawerType: document.getElementById("drawerProfileType"),
@@ -820,42 +825,97 @@ async function renderDriverRows(storageTools) {
   if (!state.drivers.length) {
     elements.driverTableBody.innerHTML = "";
     setTableMessage(elements.driverMessage, "No registered drivers found.");
+    updateDriverQueueCounts([]);
+    updateDriverResultsCopy(0);
     return;
   }
 
-  const drivers = await Promise.all(
-    state.drivers.map(async (record) => buildNormalizedDriver(record, storageTools))
-  );
-
+  const drivers = await Promise.all(state.drivers.map(async (record) => buildNormalizedDriver(record, storageTools)));
   state.normalizedDrivers = drivers;
+  updateDriverQueueCounts(drivers);
+  const filteredDrivers = drivers.filter(matchesDriverWorkspace);
   hideTableMessage(elements.driverMessage);
-  elements.driverTableBody.innerHTML = drivers
+  if (!filteredDrivers.length) {
+    elements.driverTableBody.innerHTML = "";
+    const queryCopy = state.searchQuery ? ` matching “${state.searchQuery}”` : "";
+    setTableMessage(elements.driverMessage, `No ${driverFilterLabel()} found${queryCopy}.`);
+    updateDriverResultsCopy(0);
+    return;
+  }
+
+  updateDriverResultsCopy(filteredDrivers.length);
+  elements.driverTableBody.innerHTML = filteredDrivers
     .map((driver, index) => {
       const verification = driver.verificationStatus;
       const application = driver.applicationStatus;
 
       return `
         <tr>
-          <td><img class="avatar" src="${driver.photoUrl}" alt="${escapeHtml(driver.fullName)}"></td>
-          <td>${escapeHtml(driver.fullName)}</td>
-          <td>${escapeHtml(driver.email)}</td>
-          <td>${escapeHtml(driver.phone)}</td>
-          <td>${escapeHtml(driver.vehicleModel)}</td>
-          <td>${escapeHtml(driver.numberPlate)}</td>
-          <td><span class="badge ${badgeClass(verification)}">${escapeHtml(verification)}</span></td>
-          <td><span class="badge ${badgeClass(application)}">${escapeHtml(application)}</span></td>
-          <td>${escapeHtml(driver.driverRating)}</td>
+          <td data-label="Driver"><div class="driver-identity"><img class="avatar" src="${driver.photoUrl}" alt="${escapeHtml(driver.fullName)}"><span><strong>${escapeHtml(driver.fullName)}</strong><small>${escapeHtml(driver.driverRating === "New" ? "New driver" : `${driver.driverRating} rating`)}</small></span></div></td>
+          <td data-label="Contact"><strong>${escapeHtml(driver.email)}</strong><small>${escapeHtml(driver.phone)}</small></td>
+          <td data-label="Vehicle">${escapeHtml(driver.vehicleModel)}</td>
+          <td data-label="Plate">${escapeHtml(driver.numberPlate)}</td>
+          <td data-label="Verification"><span class="badge ${badgeClass(verification)}">${escapeHtml(verification)}</span></td>
+          <td data-label="Application"><span class="badge ${badgeClass(application)}">${escapeHtml(application)}</span></td>
           <td class="action-cell">
-            <button type="button" data-action="view-driver" data-index="${index}" data-driver-id="${escapeHtml(driver.id)}">View</button>
-            <button type="button" data-action="approve" data-driver-id="${escapeHtml(driver.id)}">Approve</button>
+            <button type="button" data-action="view-driver" data-index="${state.normalizedDrivers.findIndex((item) => item.id === driver.id)}" data-driver-id="${escapeHtml(driver.id)}">Review</button>
+            <button class="approve-action" type="button" data-action="approve" data-driver-id="${escapeHtml(driver.id)}">Approve</button>
             <button type="button" data-action="reject" data-driver-id="${escapeHtml(driver.id)}">Reject</button>
-            <button type="button" data-action="suspend" data-driver-id="${escapeHtml(driver.id)}">Suspend</button>
-            <button type="button" data-action="delete" data-driver-id="${escapeHtml(driver.id)}">Delete</button>
           </td>
         </tr>
       `;
     })
     .join("");
+}
+
+function driverCategory(driver) {
+  const status = String(driver.applicationStatus || "").toLowerCase();
+  const accountStatus = String(driver.driverStatus || "").toLowerCase();
+  if (status.includes("reject") || status.includes("suspend") || accountStatus.includes("suspend")) return "attention";
+  if (driver.verifiedDriver || status.includes("approv") || accountStatus.includes("approv") || accountStatus === "active") return "active";
+  return "applications";
+}
+
+function driverFilterLabel() {
+  return { applications: "driver applications", active: "active drivers", attention: "drivers needing attention", all: "drivers" }[state.driverFilter] || "drivers";
+}
+
+function matchesDriverWorkspace(driver) {
+  const categoryMatches = state.searchQuery || state.driverFilter === "all" || driverCategory(driver) === state.driverFilter;
+  const haystack = [driver.fullName, driver.email, driver.phone, driver.vehicleModel, driver.numberPlate, driver.applicationStatus, driver.verificationStatus].join(" ").toLowerCase();
+  return categoryMatches && haystack.includes(state.searchQuery.toLowerCase());
+}
+
+function updateDriverResultsCopy(count) {
+  if (!elements.driverResultsCopy) return;
+  const suffix = state.searchQuery ? ` for “${state.searchQuery}”` : "";
+  elements.driverResultsCopy.textContent = `${count} ${count === 1 ? "result" : "results"}${suffix}`;
+}
+
+function updateDriverQueueCounts(drivers) {
+  const counts = drivers.reduce((result, driver) => {
+    result[driverCategory(driver)] += 1;
+    return result;
+  }, { applications: 0, active: 0, attention: 0 });
+  const values = {
+    applicationsCount: counts.applications, activeDriversCount: counts.active, attentionDriversCount: counts.attention,
+    applicationsTabCount: counts.applications, activeTabCount: counts.active, attentionTabCount: counts.attention, allDriversTabCount: drivers.length
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  });
+}
+
+function setDriverFilter(filter) {
+  state.driverFilter = filter;
+  elements.driverFilterButtons.forEach((button) => {
+    const active = button.dataset.driverFilter === filter;
+    button.classList.toggle("active", active);
+    if (button.getAttribute("role") === "tab") button.setAttribute("aria-selected", String(active));
+  });
+  if (state.firebaseTools) renderDriverRows({ storage: state.firebaseTools.storage, storageRef: state.firebaseTools.storageRef, getDownloadURL: state.firebaseTools.getDownloadURL });
+  document.getElementById("drivers")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderRiderRows() {
@@ -869,8 +929,14 @@ function renderRiderRows() {
 
   const riders = state.riders.map(normalizeRider);
   state.normalizedRiders = riders;
+  const filteredRiders = riders.filter((rider) => [rider.fullName, rider.email, rider.phone, rider.accountStatus].join(" ").toLowerCase().includes(state.searchQuery.toLowerCase()));
   hideTableMessage(elements.riderMessage);
-  elements.riderTableBody.innerHTML = riders
+  if (!filteredRiders.length) {
+    elements.riderTableBody.innerHTML = "";
+    setTableMessage(elements.riderMessage, `No riders found${state.searchQuery ? ` matching “${state.searchQuery}”` : ""}.`);
+    return;
+  }
+  elements.riderTableBody.innerHTML = filteredRiders
     .map(
       (rider, index) => `
         <tr>
@@ -1712,6 +1778,23 @@ function startAdminProfileListener(tools) {
 }
 
 function bindActions() {
+  elements.globalSearch?.addEventListener("input", () => {
+    state.searchQuery = elements.globalSearch.value.trim();
+    if (state.firebaseTools) {
+      const storageTools = { storage: state.firebaseTools.storage, storageRef: state.firebaseTools.storageRef, getDownloadURL: state.firebaseTools.getDownloadURL };
+      renderDriverRows(storageTools);
+      renderRiderRows();
+    }
+  });
+
+  elements.driverFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => setDriverFilter(button.dataset.driverFilter));
+  });
+
+  document.querySelectorAll("[data-jump-to]").forEach((button) => {
+    button.addEventListener("click", () => document.getElementById(button.dataset.jumpTo)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  });
+
   elements.adminProfileToggle?.addEventListener("click", toggleAdminMenu);
   elements.adminProfileToggle?.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {

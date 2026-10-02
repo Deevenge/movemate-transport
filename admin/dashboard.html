@@ -51,7 +51,7 @@
         <label class="search-box">
           <i data-lucide="search"></i>
           <span class="sr-only">Search control center</span>
-          <input type="search" placeholder="Search drivers, trips, payments...">
+          <input id="globalSearch" type="search" placeholder="Search drivers, riders, vehicles..." autocomplete="off">
         </label>
         <div class="topbar-actions">
           <button class="icon-button notification-button" type="button" aria-label="Notifications">
@@ -145,24 +145,35 @@
               </article>
             </div>
 
-            <section class="panel table-panel" id="drivers">
+            <section class="panel driver-workspace" id="drivers">
               <div class="panel-head table-head">
-                <div><h2>Driver Management</h2><p>Verification queue and account controls.</p></div>
-                <button class="primary-button" type="button"><i data-lucide="sliders-horizontal"></i>Review Queue</button>
+                <div><p class="eyebrow">Driver workspace</p><h2>Manage drivers by task</h2><p>Review applications first, then manage active and inactive accounts.</p></div>
+                <button class="primary-button" type="button" data-driver-filter="applications"><i data-lucide="clipboard-check"></i>Review applications</button>
+              </div>
+              <div class="driver-queue-summary" aria-label="Driver queue summary">
+                <button type="button" class="queue-card active" data-driver-filter="applications"><span class="queue-icon amber"><i data-lucide="file-clock"></i></span><span><strong id="applicationsCount">0</strong><small>Applications to review</small></span></button>
+                <button type="button" class="queue-card" data-driver-filter="active"><span class="queue-icon green"><i data-lucide="badge-check"></i></span><span><strong id="activeDriversCount">0</strong><small>Active drivers</small></span></button>
+                <button type="button" class="queue-card" data-driver-filter="attention"><span class="queue-icon red"><i data-lucide="triangle-alert"></i></span><span><strong id="attentionDriversCount">0</strong><small>Needs attention</small></span></button>
+              </div>
+              <div class="driver-toolbar">
+                <div class="driver-tabs" role="tablist" aria-label="Driver lists">
+                  <button type="button" class="active" role="tab" aria-selected="true" data-driver-filter="applications">Applications <span id="applicationsTabCount">0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-driver-filter="active">Active <span id="activeTabCount">0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-driver-filter="attention">Needs attention <span id="attentionTabCount">0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-driver-filter="all">All drivers <span id="allDriversTabCount">0</span></button>
+                </div>
+                <p class="results-copy" id="driverResultsCopy" aria-live="polite">Loading drivers…</p>
               </div>
               <div class="table-scroll">
                 <table>
                   <thead>
                     <tr>
-                      <th>Profile Picture</th>
-                      <th>Full Name</th>
-                      <th>Email</th>
-                      <th>Phone</th>
+                      <th>Driver</th>
+                      <th>Contact</th>
                       <th>Vehicle Model</th>
                       <th>Number Plate</th>
                       <th>Verification Status</th>
                       <th>Application Status</th>
-                      <th>Driver Rating</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -170,25 +181,19 @@
                     <tr class="skeleton-row">
                       <td><span class="skeleton skeleton-avatar"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
-                      <td><span class="skeleton skeleton-text wide"></span></td>
-                      <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-pill"></span></td>
                       <td><span class="skeleton skeleton-pill"></span></td>
-                      <td><span class="skeleton skeleton-text short"></span></td>
                       <td><span class="skeleton skeleton-actions"></span></td>
                     </tr>
                     <tr class="skeleton-row">
                       <td><span class="skeleton skeleton-avatar"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
-                      <td><span class="skeleton skeleton-text wide"></span></td>
-                      <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-text"></span></td>
                       <td><span class="skeleton skeleton-pill"></span></td>
                       <td><span class="skeleton skeleton-pill"></span></td>
-                      <td><span class="skeleton skeleton-text short"></span></td>
                       <td><span class="skeleton skeleton-actions"></span></td>
                     </tr>
                   </tbody>
@@ -233,8 +238,8 @@
           <aside class="right-stack" aria-label="Operations side panel">
             <section class="panel quick-actions">
               <div class="panel-head"><div><h2>Quick Actions</h2><p>Common operational tasks.</p></div></div>
-              <button type="button"><i data-lucide="shield-check"></i><span>Verify Drivers</span></button>
-              <button type="button"><i data-lucide="user-cog"></i><span>Manage Users</span></button>
+              <button type="button" data-driver-filter="applications"><i data-lucide="shield-check"></i><span>Verify Drivers</span></button>
+              <button type="button" data-jump-to="passengers"><i data-lucide="user-cog"></i><span>Manage Users</span></button>
               <button type="button"><i data-lucide="file-chart-column"></i><span>View Reports</span></button>
               <button type="button"><i data-lucide="megaphone"></i><span>Announcements</span></button>
               <button type="button"><i data-lucide="activity"></i><span>System Status</span></button>
