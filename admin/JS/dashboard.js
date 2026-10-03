@@ -18,6 +18,16 @@ const firebaseConfigPaths = [
 const timestampFields = ["createdAt", "created_at", "submitted_at", "updatedAt", "timestamp", "date", "trip_datetime", "tripDateTime"];
 const riderRoles = ["rider", "passenger"];
 const requireAdminAuthForDashboard = true;
+const announcementTemplates = {
+  drivers: {
+    title: "You can now add stops to your trips",
+    message: "You can now add stops when posting a trip. Add planned pick-up or drop-off points along your route so passengers can find a trip that suits them better.\n\nPlease check that your stops and trip details are correct before posting."
+  },
+  riders: {
+    title: "✨ New: Add stops to your ride requests",
+    message: "You can now add optional stops when requesting a ride. Add every place your group needs to pass through, and drivers can plan the full route. 🚗📍\n\nYour group can travel the route together with the stops that work for you. 🙌"
+  }
+};
 
 const defaultAvatar =
   "data:image/svg+xml;charset=UTF-8," +
@@ -117,8 +127,11 @@ const elements = {
   cancelAnnouncement: document.getElementById("cancelAnnouncement"),
   announcementTitleInput: document.getElementById("announcementTitleInput"),
   announcementMessageInput: document.getElementById("announcementMessageInput"),
+  announcementAudienceInput: document.getElementById("announcementAudienceInput"),
+  announcementAudienceHelp: document.getElementById("announcementAudienceHelp"),
   sendAnnouncement: document.getElementById("sendAnnouncement")
 };
+let previousAnnouncementAudience = "drivers";
 
 const chartData = {
   dailyTripsChart: {
@@ -1406,6 +1419,7 @@ function closeConfirmModal() {
 }
 
 function openAnnouncementModal() {
+  updateAnnouncementAudienceCopy();
   document.body.classList.add("announcement-modal-open");
   elements.announcementBackdrop.hidden = false;
   elements.announcementModal.hidden = false;
@@ -1470,6 +1484,79 @@ async function sendAnnouncementToActiveDrivers(title, message) {
       elements.sendAnnouncement.disabled = false;
       elements.sendAnnouncement.innerHTML = `<i data-lucide="send"></i>Send to active drivers`;
       if (window.lucide) window.lucide.createIcons();
+    }
+  }
+}
+
+function getAnnouncementRecipients(audience) {
+  if (audience === "riders") return state.users.filter((user) => isRider(user));
+  return state.users.filter(isActiveDriverForAnnouncement);
+}
+
+function updateAnnouncementAudienceCopy() {
+  const audience = elements.announcementAudienceInput?.value || "drivers";
+  if (audience !== previousAnnouncementAudience) {
+    const previousTemplate = announcementTemplates[previousAnnouncementAudience];
+    const nextTemplate = announcementTemplates[audience] || announcementTemplates.drivers;
+    if (elements.announcementTitleInput?.value.trim() === previousTemplate.title) {
+      elements.announcementTitleInput.value = nextTemplate.title;
+    }
+    if (elements.announcementMessageInput?.value.trim() === previousTemplate.message) {
+      elements.announcementMessageInput.value = nextTemplate.message;
+    }
+    previousAnnouncementAudience = audience;
+  }
+  const recipients = getAnnouncementRecipients(audience);
+  const audienceName = audience === "riders" ? "rider" : "active driver";
+  if (elements.announcementAudienceHelp) {
+    elements.announcementAudienceHelp.textContent = `This message will appear in the app for every ${audienceName} when they next open it. ${recipients.length} ${audience === "riders" ? "rider" : "active driver"}${recipients.length === 1 ? "" : "s"} will receive it.`;
+  }
+  if (elements.sendAnnouncement) {
+    elements.sendAnnouncement.innerHTML = `<i data-lucide="send"></i>Send to ${audience === "riders" ? "riders" : "active drivers"}`;
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
+async function sendAnnouncementToRiders(title, message) {
+  const tools = state.firebaseTools;
+  if (!tools?.db) {
+    showToast("Firebase is still loading. Please try again.");
+    return;
+  }
+  const riders = getAnnouncementRecipients("riders");
+  if (!riders.length) {
+    showToast("No rider accounts were found.");
+    return;
+  }
+  const announcementId = `rider-announcement-${Date.now()}`;
+  const sender = tools.adminUser?.uid || tools.auth?.currentUser?.uid || state.adminId;
+  if (elements.sendAnnouncement) {
+    elements.sendAnnouncement.disabled = true;
+    elements.sendAnnouncement.textContent = "Sending…";
+  }
+  try {
+    const results = await Promise.allSettled(riders.map((rider) => {
+      const firstName = text(rider.fullName || rider.name || rider.displayName, "Rider").trim().split(/\s+/)[0];
+      return tools.updateDoc(tools.doc(tools.db, "users", rider.id), {
+        riderAnnouncementId: announcementId,
+        riderAnnouncementTitle: title,
+        riderAnnouncementMessage: `Howzit ${firstName}! 👋\n\n${message}`,
+        riderAnnouncementUnread: true,
+        riderAnnouncementCreatedAt: tools.serverTimestamp(),
+        riderAnnouncementSentBy: sender,
+        updatedAt: tools.serverTimestamp()
+      });
+    }));
+    const sent = results.filter((result) => result.status === "fulfilled").length;
+    if (sent === riders.length) showToast(`Announcement sent to ${sent} riders.`);
+    else showToast(`Announcement sent to ${sent} of ${riders.length} riders. Check Firebase permissions.`);
+  } catch (error) {
+    console.error("Unable to send rider announcement:", error);
+    showToast("Could not send the announcement. Check Firebase permissions.");
+  } finally {
+    if (elements.sendAnnouncement) {
+      elements.sendAnnouncement.disabled = false;
+      updateAnnouncementAudienceCopy();
     }
   }
 }
@@ -1978,16 +2065,22 @@ function bindActions() {
       showToast("Enter an announcement title and message first.");
       return;
     }
+    const audience = elements.announcementAudienceInput?.value || "drivers";
+    const isRiderAudience = audience === "riders";
+    const recipientCount = getAnnouncementRecipients(audience).length;
     closeAnnouncementModal();
     openConfirmModal({
       eyebrow: "Send announcement",
-      title: "Send this to all active drivers?",
-      message: `${title}\n\nThis will be delivered to ${state.users.filter(isActiveDriverForAnnouncement).length} active driver accounts.`,
+      title: `Send this to ${isRiderAudience ? "all riders" : "all active drivers"}?`,
+      message: `${title}\n\nThis will be delivered to ${recipientCount} ${isRiderAudience ? "rider" : "active driver"}${recipientCount === 1 ? "" : "s"}.`,
       confirmLabel: "Send announcement",
       isDanger: false,
-      onConfirm: () => sendAnnouncementToActiveDrivers(title, message)
+      onConfirm: () => isRiderAudience
+        ? sendAnnouncementToRiders(title, message)
+        : sendAnnouncementToActiveDrivers(title, message)
     });
   });
+  elements.announcementAudienceInput?.addEventListener("change", updateAnnouncementAudienceCopy);
 
   elements.adminProfileToggle?.addEventListener("click", toggleAdminMenu);
   elements.adminProfileToggle?.addEventListener("keydown", (event) => {

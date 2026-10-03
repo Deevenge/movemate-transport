@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="CSS/components.css">
-  <link rel="stylesheet" href="CSS/dashboard.css?v=4">
+  <link rel="stylesheet" href="CSS/dashboard.css?v=5">
 </head>
 <body>
   <div class="admin-shell">
@@ -424,23 +424,24 @@
   </section>
 
   <div class="drawer-modal-backdrop" id="announcementBackdrop" hidden></div>
-  <section class="driver-action-modal announcement-modal" id="announcementModal" aria-label="Send driver announcement" aria-hidden="true" hidden>
+  <section class="driver-action-modal announcement-modal" id="announcementModal" aria-label="Send announcement" aria-hidden="true" hidden>
     <div class="drawer-head">
-      <div><p class="eyebrow">Driver communication</p><h2>Send announcement</h2></div>
+      <div><p class="eyebrow">Community communication</p><h2>Send announcement</h2></div>
       <button class="icon-button" id="closeAnnouncement" type="button" aria-label="Close announcement dialog"><i data-lucide="x"></i></button>
     </div>
     <div class="driver-action-modal-body">
-      <p class="confirm-action-message">This message will appear in the app for every active driver when they next open it.</p>
-      <label class="modal-field" for="announcementTitleInput"><span>Title</span><input id="announcementTitleInput" type="text" maxlength="90" value="Get more riders on your trip 🚗"></label>
-      <label class="modal-field" for="announcementMessageInput"><span>Message</span><textarea id="announcementMessageInput" rows="6" maxlength="600">Once you match a ride request, please post it as your trip on MoveMate. This helps other passengers find your route and lets you fill available seats.
+      <p class="confirm-action-message" id="announcementAudienceHelp">This message will appear in the app for every active driver when they next open it.</p>
+      <label class="modal-field" for="announcementAudienceInput"><span>Audience</span><select id="announcementAudienceInput"><option value="drivers">Active drivers</option><option value="riders">Riders</option></select></label>
+      <label class="modal-field" for="announcementTitleInput"><span>Title</span><input id="announcementTitleInput" type="text" maxlength="90" value="You can now add stops to your trips"></label>
+      <label class="modal-field" for="announcementMessageInput"><span>Message</span><textarea id="announcementMessageInput" rows="6" maxlength="600">You can now add stops when posting a trip. Add planned pick-up or drop-off points along your route so passengers can find a trip that suits them better.
 
-Open My Trips, select the matched request, then tap Post as Trip.</textarea></label>
-      <div class="drawer-action-buttons"><button type="button" id="cancelAnnouncement">Cancel</button><button class="primary-button" id="sendAnnouncement" type="button"><i data-lucide="send"></i>Send to active drivers</button></div>
+Please check that your stops and trip details are correct before posting.</textarea></label>
+      <div class="drawer-action-buttons"><button type="button" id="cancelAnnouncement">Cancel</button><button class="primary-button" id="sendAnnouncement" type="button"><i data-lucide="send"></i>Send announcement</button></div>
     </div>
   </section>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="JS/components.js"></script>
-  <script type="module" src="JS/dashboard.js?v=6"></script>
+  <script type="module" src="JS/dashboard.js?v=7"></script>
 </body>
 </html>

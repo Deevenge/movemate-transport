@@ -1256,13 +1256,19 @@ body.announcement-modal-open .driver-action-modal#announcementModal {
   text-transform: uppercase;
 }
 
-.modal-field textarea {
+.modal-field textarea,
+.modal-field select {
   width: 100%;
-  min-height: 120px;
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   font: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+
+.modal-field textarea {
+  min-height: 120px;
   resize: vertical;
 }
 
@@ -1273,10 +1279,20 @@ body.announcement-modal-open .driver-action-modal#announcementModal {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   font: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+
+.modal-field select {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
 }
 
 .modal-field input:focus,
-.modal-field textarea:focus {
+.modal-field textarea:focus,
+.modal-field select:focus {
   outline: 0;
   border-color: rgba(24, 198, 216, 0.72);
   box-shadow: 0 0 0 4px rgba(24, 198, 216, 0.12);
