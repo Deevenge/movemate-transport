@@ -20,12 +20,12 @@ const riderRoles = ["rider", "passenger"];
 const requireAdminAuthForDashboard = true;
 const announcementTemplates = {
   drivers: {
-    title: "You can now add stops to your trips",
-    message: "You can now add stops when posting a trip. Add planned pick-up or drop-off points along your route so passengers can find a trip that suits them better.\n\nPlease check that your stops and trip details are correct before posting."
+    title: "Your trip details are protected 🔒",
+    message: "For your safety, only riders who have booked a seat on your trip can see your name, phone number, vehicle registration number, and car model.\n\nOther riders cannot view these details."
   },
   riders: {
-    title: "✨ New: Add stops to your ride requests",
-    message: "You can now add optional stops when requesting a ride. Add every place your group needs to pass through, and drivers can plan the full route. 🚗📍\n\nYour group can travel the route together with the stops that work for you. 🙌"
+    title: "Your details are protected 🔒",
+    message: "For your safety, drivers can only see your details after they have matched your ride request.\n\nUntil then, your personal information remains private. 🛡️"
   }
 };
 
