@@ -72,6 +72,7 @@ const elements = {
   globalSearch: document.getElementById("globalSearch"),
   driverResultsCopy: document.getElementById("driverResultsCopy"),
   driverFilterButtons: document.querySelectorAll("[data-driver-filter]"),
+  downloadActiveDriversPdf: document.getElementById("downloadActiveDriversPdf"),
   tripTableBody: document.getElementById("tripsTableBody"),
   tripMessage: document.getElementById("tripsTableMessage"),
   tripResultsCopy: document.getElementById("tripResultsCopy"),
@@ -1579,6 +1580,154 @@ async function downloadDocument(url, filename) {
   }
 }
 
+function loadImageAsDataUrl(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/jpeg", 0.9));
+    };
+    image.onerror = () => reject(new Error("Logo image could not be loaded."));
+    image.src = source;
+  });
+}
+
+function pdfSafeText(value) {
+  return text(value, "Not provided").replace(/[\u2013\u2014]/g, "-");
+}
+
+async function downloadActiveDriversPdf() {
+  // Keep this export exactly aligned with the Active tab in the driver workspace.
+  const activeDrivers = state.drivers
+    .map((record) => normalizeDriver(record, defaultAvatar))
+    .filter((driver) => driverCategory(driver) === "active")
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+  if (!activeDrivers.length) {
+    showToast("There are no active drivers to include in a PDF yet.");
+    return;
+  }
+
+  const jsPDF = window.jspdf?.jsPDF;
+  if (!jsPDF) {
+    showToast("The PDF tool is still loading. Please try again in a moment.");
+    return;
+  }
+
+  const button = elements.downloadActiveDriversPdf;
+  const originalLabel = button?.innerHTML;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Preparing PDF…";
+  }
+
+  try {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const createdAt = new Intl.DateTimeFormat("en-ZA", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+    let logoDataUrl = null;
+    try {
+      logoDataUrl = await loadImageAsDataUrl("../images/logo.jpg");
+    } catch (error) {
+      console.warn("MoveMate logo could not be added to verified drivers PDF:", error);
+    }
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 14;
+    const columns = [10, 67, 51, 54];
+    const headers = ["#", "Driver and contact", "Vehicle details", "Status"];
+    let y = 14;
+
+    const drawHeader = () => {
+      if (logoDataUrl) pdf.addImage(logoDataUrl, "JPEG", margin, 10, 19, 19);
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.text("MoveMate Transport", logoDataUrl ? 38 : margin, 17);
+      pdf.setFontSize(12);
+      pdf.text("Active Drivers List", logoDataUrl ? 38 : margin, 23);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Generated ${createdAt} | ${activeDrivers.length} active driver${activeDrivers.length === 1 ? "" : "s"}`, margin, 34);
+      y = 41;
+      pdf.setFillColor(8, 17, 31);
+      pdf.rect(margin, y, pageWidth - margin * 2, 8, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      let x = margin + 2;
+      headers.forEach((header, index) => {
+        pdf.text(header, x, y + 5.2);
+        x += columns[index];
+      });
+      y += 8;
+    };
+
+    const drawFooter = (pageNumber) => {
+      pdf.setDrawColor(226, 232, 240);
+      pdf.line(margin, pageHeight - 11, pageWidth - margin, pageHeight - 11);
+      pdf.setTextColor(100, 116, 139);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.text("Confidential - MoveMate Transport", margin, pageHeight - 6);
+      pdf.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 6, { align: "right" });
+    };
+
+    drawHeader();
+    activeDrivers.forEach((driver, index) => {
+      const cells = [
+        String(index + 1),
+        `${pdfSafeText(driver.fullName)}\n${pdfSafeText(driver.email)}\n${pdfSafeText(driver.phone)}`,
+        `${pdfSafeText(driver.vehicleModel)}\nPlate: ${pdfSafeText(driver.numberPlate)}\nColour: ${pdfSafeText(driver.carColor)}`,
+        `${pdfSafeText(driver.verificationStatus)}\n${pdfSafeText(driver.driverStatus)}\nSince: ${pdfSafeText(driver.createdAt)}`
+      ];
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.8);
+      const lines = cells.map((cell, cellIndex) => pdf.splitTextToSize(cell, columns[cellIndex] - 4));
+      const rowHeight = Math.max(13, ...lines.map((line) => line.length * 4.1 + 4));
+
+      if (y + rowHeight > pageHeight - 15) {
+        drawFooter(pdf.getNumberOfPages());
+        pdf.addPage();
+        drawHeader();
+      }
+
+      pdf.setFillColor(index % 2 === 0 ? 248 : 255, index % 2 === 0 ? 250 : 255, index % 2 === 0 ? 252 : 255);
+      pdf.rect(margin, y, pageWidth - margin * 2, rowHeight, "F");
+      pdf.setDrawColor(226, 232, 240);
+      pdf.rect(margin, y, pageWidth - margin * 2, rowHeight, "S");
+      let x = margin;
+      lines.forEach((line, cellIndex) => {
+        if (cellIndex > 0) pdf.line(x, y, x, y + rowHeight);
+        pdf.setTextColor(15, 23, 42);
+        pdf.setFont("helvetica", cellIndex === 0 ? "bold" : "normal");
+        pdf.text(line, x + 2, y + 4.2);
+        x += columns[cellIndex];
+      });
+      y += rowHeight;
+    });
+
+    drawFooter(pdf.getNumberOfPages());
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    pdf.save(`movemate-approved-drivers-${dateSlug}.pdf`);
+    showToast(`Active drivers PDF downloaded (${activeDrivers.length}).`);
+  } catch (error) {
+    console.error("Unable to generate active drivers PDF:", error);
+    showToast("Could not generate the active drivers PDF. Please try again.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalLabel;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+}
+
 function getDriverRecord(driverId) {
   return state.users.find((user) => user.id === driverId && isDriver(user));
 }
@@ -2045,6 +2194,8 @@ function bindActions() {
   elements.driverFilterButtons.forEach((button) => {
     button.addEventListener("click", () => setDriverFilter(button.dataset.driverFilter));
   });
+
+  elements.downloadActiveDriversPdf?.addEventListener("click", downloadActiveDriversPdf);
 
   elements.tripFilterButtons.forEach((button) => {
     button.addEventListener("click", () => setTripFilter(button.dataset.tripFilter));

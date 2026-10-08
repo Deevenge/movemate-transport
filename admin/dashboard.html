@@ -175,7 +175,10 @@
             <section class="panel driver-workspace" id="drivers">
               <div class="panel-head table-head">
                 <div><p class="eyebrow">Driver workspace</p><h2>Manage drivers by task</h2><p>Review applications first, then manage active and inactive accounts.</p></div>
-                <button class="primary-button" type="button" data-driver-filter="applications"><i data-lucide="clipboard-check"></i>Review applications</button>
+                <div class="driver-workspace-actions">
+                  <button class="secondary-button" id="downloadActiveDriversPdf" type="button"><i data-lucide="file-down"></i>Download active drivers PDF</button>
+                  <button class="primary-button" type="button" data-driver-filter="applications"><i data-lucide="clipboard-check"></i>Review applications</button>
+                </div>
               </div>
               <div class="driver-queue-summary" aria-label="Driver queue summary">
                 <button type="button" class="queue-card active" data-driver-filter="applications"><span class="queue-icon amber"><i data-lucide="file-clock"></i></span><span><strong id="applicationsCount">0</strong><small>Applications to review</small></span></button>
@@ -441,7 +444,8 @@ Other riders cannot view these details.</textarea></label>
   </section>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="JS/components.js"></script>
-  <script type="module" src="JS/dashboard.js?v=7"></script>
+  <script type="module" src="JS/dashboard.js?v=8"></script>
 </body>
 </html>
