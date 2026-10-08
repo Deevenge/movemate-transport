@@ -70,6 +70,10 @@ const elements = {
   riderTableBody: document.getElementById("ridersTableBody"),
   riderMessage: document.getElementById("ridersTableMessage"),
   globalSearch: document.getElementById("globalSearch"),
+  globalSearchResults: document.getElementById("globalSearchResults"),
+  globalSearchTitle: document.getElementById("globalSearchTitle"),
+  globalSearchResultsList: document.getElementById("globalSearchResultsList"),
+  clearGlobalSearch: document.getElementById("clearGlobalSearch"),
   driverResultsCopy: document.getElementById("driverResultsCopy"),
   driverFilterButtons: document.querySelectorAll("[data-driver-filter]"),
   downloadActiveDriversPdf: document.getElementById("downloadActiveDriversPdf"),
@@ -77,6 +81,12 @@ const elements = {
   tripMessage: document.getElementById("tripsTableMessage"),
   tripResultsCopy: document.getElementById("tripResultsCopy"),
   tripFilterButtons: document.querySelectorAll("[data-trip-filter]"),
+  tripChatModal: document.getElementById("tripChatModal"),
+  tripChatBackdrop: document.getElementById("tripChatBackdrop"),
+  tripChatTitle: document.getElementById("tripChatTitle"),
+  tripChatMeta: document.getElementById("tripChatMeta"),
+  tripChatMessages: document.getElementById("tripChatMessages"),
+  closeTripChat: document.getElementById("closeTripChat"),
   drawer: document.getElementById("driverDrawer"),
   drawerBackdrop: document.getElementById("driverDrawerBackdrop"),
   drawerType: document.getElementById("drawerProfileType"),
@@ -604,6 +614,7 @@ async function importFirebaseHelpers() {
     collection: firestore.collection,
     doc: firestore.doc,
     onSnapshot: firestore.onSnapshot,
+    getDocs: firestore.getDocs,
     setDoc: firestore.setDoc,
     updateDoc: firestore.updateDoc,
     deleteDoc: firestore.deleteDoc,
@@ -784,6 +795,61 @@ function renderLiveDashboard() {
   updateActivity();
   updateOperationsCopy();
   renderTripRows();
+  renderGlobalSearchResults();
+}
+
+function recordSearchText(record) {
+  const values = [];
+  const collect = (value) => {
+    if (value === null || value === undefined) return;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      values.push(String(value));
+      return;
+    }
+    if (value instanceof Date) {
+      values.push(value.toISOString());
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (typeof value === "object") Object.values(value).forEach(collect);
+  };
+  collect(record);
+  return values.join(" ").toLowerCase();
+}
+
+function buildGlobalSearchResults(query) {
+  const normalizedQuery = query.toLowerCase();
+  const items = [];
+  const addMatches = (records, type, title, subtitle, target) => {
+    records.forEach((record) => {
+      if (!recordSearchText(record).includes(normalizedQuery)) return;
+      items.push({ type, title: title(record), subtitle: subtitle(record), target });
+    });
+  };
+
+  addMatches(state.drivers, "Driver", (record) => text(record.fullName || record.name || record.displayName), (record) => `${text(record.email)} · ${text(record.phone)}`, "drivers");
+  addMatches(state.riders, "Rider", (record) => text(record.fullName || record.name || record.displayName), (record) => `${text(record.email)} · ${text(record.phone)}`, "passengers");
+  addMatches(state.trips, "Trip", (record) => `${displayLocation(record.pickupLocation || record.pickup || record.origin)} → ${displayLocation(record.destination || record.dropoff || record.to)}`, (record) => text(record.tripStatus || record.trip_status || record.status), "trips");
+  addMatches(state.rideRequests, "Ride request", (record) => `${displayLocation(record.pickupLocation || record.pickup || record.origin)} → ${displayLocation(record.destination || record.dropoff || record.to)}`, (record) => text(record.requestStatus || record.request_status || record.status), "trips");
+  addMatches(state.bookings, "Booking", (record) => text(record.bookingReference || record.reference || record.id, "Booking"), (record) => text(record.status || record.bookingStatus || record.tripName || record.tripId), "trips");
+  addMatches(state.chats, "Chat", (record) => text(record.subject || record.title || record.senderName || record.id, "Chat"), (record) => text(record.lastMessage || record.message || record.status), "trips");
+  return items.slice(0, 30);
+}
+
+function renderGlobalSearchResults() {
+  const query = state.searchQuery.trim();
+  if (!elements.globalSearchResults || !elements.globalSearchResultsList) return;
+  elements.globalSearchResults.hidden = !query;
+  if (!query) return;
+
+  const results = buildGlobalSearchResults(query);
+  if (elements.globalSearchTitle) elements.globalSearchTitle.textContent = `${results.length} result${results.length === 1 ? "" : "s"} for “${query}”`;
+  elements.globalSearchResultsList.innerHTML = results.length
+    ? results.map((result) => `<button type="button" class="global-search-result" data-search-target="${escapeHtml(result.target)}"><small>${escapeHtml(result.type)}</small><strong>${escapeHtml(result.title)}</strong><span>${escapeHtml(result.subtitle)}</span></button>`).join("")
+    : `<p class="global-search-empty">No drivers, riders, trips, bookings, ride requests, or chats match “${escapeHtml(query)}”.</p>`;
 }
 
 function displayLocation(value) {
@@ -809,6 +875,8 @@ function normalizeTripRecord(record, type) {
     status,
     driver: text(record.driverName || record.driver_name || record.driver?.name, findUserName(driverId)),
     passenger: text(record.passengerName || record.passenger_name || record.riderName || record.rider_name || record.customerName, findUserName(passengerId)),
+    driverId: driverId || "",
+    passengerId: passengerId || "",
     pickup: displayLocation(record.pickupLocation || record.pickup_location || record.pickup || record.origin || record.from_location || record.from),
     destination: displayLocation(record.destination || record.dropoffLocation || record.dropoff_location || record.dropoff || record.to_location || record.to),
     date: getRecordDate(record),
@@ -856,8 +924,58 @@ function renderTripRows() {
       <td data-label="Passenger"><strong>${escapeHtml(item.passenger)}</strong></td>
       <td data-label="Route"><span class="route-copy">${escapeHtml(item.pickup)} <i data-lucide="arrow-right"></i> ${escapeHtml(item.destination)}</span></td>
       <td data-label="Updated">${escapeHtml(formatDate(item.date))}</td>
+      <td data-label="Chat"><button class="trip-chat-button" type="button" data-trip-chat-id="${escapeHtml(item.id)}">View chat</button></td>
     </tr>`).join("");
   if (window.lucide) window.lucide.createIcons();
+}
+
+function closeTripChat() {
+  document.body.classList.remove("trip-chat-open");
+  elements.tripChatModal?.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("trip-chat-open") && elements.tripChatBackdrop) elements.tripChatBackdrop.hidden = true;
+    if (!document.body.classList.contains("trip-chat-open") && elements.tripChatModal) elements.tripChatModal.hidden = true;
+  }, 220);
+}
+
+async function openTripChat(item) {
+  const tools = state.firebaseTools;
+  if (!tools?.getDocs || !item?.id) {
+    showToast("Chat data is still loading. Please try again.");
+    return;
+  }
+
+  const chat = state.chats.find((record) => record.rideId === item.id);
+  if (!chat) {
+    showToast("No driver and rider chat was found for this trip.");
+    return;
+  }
+
+  if (elements.tripChatTitle) elements.tripChatTitle.textContent = `${item.driver} and ${item.passenger}`;
+  if (elements.tripChatMeta) elements.tripChatMeta.textContent = `${item.pickup} → ${item.destination}`;
+  if (elements.tripChatMessages) elements.tripChatMessages.innerHTML = `<p class="trip-chat-empty">Loading conversation…</p>`;
+  elements.tripChatBackdrop.hidden = false;
+  elements.tripChatModal.hidden = false;
+  elements.tripChatModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("trip-chat-open");
+
+  try {
+    const snapshot = await tools.getDocs(tools.collection(tools.db, "chats", chat.id, "messages"));
+    const messages = normalizeCollection(snapshot).sort((a, b) => (toDate(a.timestamp)?.getTime() || 0) - (toDate(b.timestamp)?.getTime() || 0));
+    if (!messages.length) {
+      elements.tripChatMessages.innerHTML = `<p class="trip-chat-empty">This chat has no messages yet.</p>`;
+      return;
+    }
+
+    elements.tripChatMessages.innerHTML = messages.map((message) => {
+      const fromDriver = message.senderId === item.driverId;
+      const sender = fromDriver ? item.driver : message.senderId === item.passengerId ? item.passenger : "Participant";
+      return `<article class="chat-message${fromDriver ? " from-driver" : ""}"><strong>${escapeHtml(sender)}</strong><p>${escapeHtml(text(message.text, ""))}</p><time>${escapeHtml(formatDate(message.timestamp))}</time></article>`;
+    }).join("");
+  } catch (error) {
+    console.error("Unable to load trip chat:", error);
+    elements.tripChatMessages.innerHTML = `<p class="trip-chat-empty">Could not load this conversation. Check Firebase permissions.</p>`;
+  }
 }
 
 function setTripFilter(filter) {
@@ -2189,6 +2307,20 @@ function bindActions() {
       renderRiderRows();
       renderTripRows();
     }
+    renderGlobalSearchResults();
+  });
+
+  elements.clearGlobalSearch?.addEventListener("click", () => {
+    if (!elements.globalSearch) return;
+    elements.globalSearch.value = "";
+    elements.globalSearch.dispatchEvent(new Event("input"));
+    elements.globalSearch.focus();
+  });
+
+  elements.globalSearchResultsList?.addEventListener("click", (event) => {
+    const result = event.target.closest("button[data-search-target]");
+    if (!result) return;
+    document.getElementById(result.dataset.searchTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   elements.driverFilterButtons.forEach((button) => {
@@ -2200,6 +2332,19 @@ function bindActions() {
   elements.tripFilterButtons.forEach((button) => {
     button.addEventListener("click", () => setTripFilter(button.dataset.tripFilter));
   });
+
+  elements.tripTableBody?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-trip-chat-id]");
+    if (!button) return;
+    const item = [
+      ...state.trips.map((record) => normalizeTripRecord(record, "trip")),
+      ...state.rideRequests.map((record) => normalizeTripRecord(record, "request"))
+    ].find((trip) => trip.id === button.dataset.tripChatId);
+    if (item) openTripChat(item);
+  });
+
+  elements.closeTripChat?.addEventListener("click", closeTripChat);
+  elements.tripChatBackdrop?.addEventListener("click", closeTripChat);
 
   document.querySelectorAll("[data-jump-to]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.jumpTo)?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -2407,6 +2552,7 @@ function bindActions() {
       closeAdminMenu();
       closeAdminProfileModal();
       closeDocumentPreview();
+      closeTripChat();
       closeRejectModal();
       closeConfirmModal();
       closeAnnouncementModal();
@@ -2486,6 +2632,7 @@ async function startRealtimeDashboard() {
       collection,
       doc,
       onSnapshot,
+      getDocs,
       setDoc,
       updateDoc,
       deleteDoc,
@@ -2504,6 +2651,7 @@ async function startRealtimeDashboard() {
       auth,
       doc,
       onSnapshot,
+      getDocs,
       setDoc,
       updateDoc,
       deleteDoc,

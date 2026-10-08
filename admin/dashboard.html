@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="CSS/components.css">
-  <link rel="stylesheet" href="CSS/dashboard.css?v=5">
+  <link rel="stylesheet" href="CSS/dashboard.css?v=7">
 </head>
 <body>
   <div class="admin-shell">
@@ -51,7 +51,7 @@
         <label class="search-box">
           <i data-lucide="search"></i>
           <span class="sr-only">Search control center</span>
-          <input id="globalSearch" type="search" placeholder="Search drivers, riders, vehicles..." autocomplete="off">
+          <input id="globalSearch" type="search" placeholder="Search drivers, riders, trips, bookings..." autocomplete="off">
         </label>
         <div class="topbar-actions">
           <button class="icon-button notification-button" type="button" aria-label="Notifications">
@@ -87,6 +87,14 @@
             <span class="status-dot"></span>
             <span>All core systems operational</span>
           </div>
+        </section>
+
+        <section class="global-search-results" id="globalSearchResults" aria-live="polite" hidden>
+          <div class="global-search-results-head">
+            <div><p class="eyebrow">Global search</p><h2 id="globalSearchTitle">Search results</h2></div>
+            <button type="button" class="search-clear-button" id="clearGlobalSearch">Clear search</button>
+          </div>
+          <div class="global-search-results-list" id="globalSearchResultsList"></div>
         </section>
 
         <section class="metric-grid" aria-label="MoveMate performance statistics">
@@ -165,7 +173,7 @@
               </div>
               <div class="table-scroll">
                 <table class="trip-table">
-                  <thead><tr><th>Status</th><th>Driver</th><th>Passenger</th><th>Route</th><th>Updated</th></tr></thead>
+                  <thead><tr><th>Status</th><th>Driver</th><th>Passenger</th><th>Route</th><th>Updated</th><th>Chat</th></tr></thead>
                   <tbody id="tripsTableBody"><tr class="skeleton-row"><td><span class="skeleton skeleton-pill"></span></td><td><span class="skeleton skeleton-text"></span></td><td><span class="skeleton skeleton-text"></span></td><td><span class="skeleton skeleton-text wide"></span></td><td><span class="skeleton skeleton-text"></span></td></tr></tbody>
                 </table>
               </div>
@@ -379,6 +387,16 @@
     <div class="document-preview-body" id="documentPreviewBody"></div>
   </section>
 
+  <div class="drawer-modal-backdrop" id="tripChatBackdrop" hidden></div>
+  <section class="trip-chat-modal" id="tripChatModal" aria-label="Trip chat" aria-hidden="true" hidden>
+    <div class="drawer-head">
+      <div><p class="eyebrow">Trip conversation</p><h2 id="tripChatTitle">Driver and rider chat</h2></div>
+      <button class="icon-button" id="closeTripChat" type="button" aria-label="Close trip chat"><i data-lucide="x"></i></button>
+    </div>
+    <div class="trip-chat-meta" id="tripChatMeta"></div>
+    <div class="trip-chat-messages" id="tripChatMessages" aria-live="polite"></div>
+  </section>
+
   <div class="drawer-modal-backdrop" id="rejectReasonBackdrop" hidden></div>
   <section class="driver-action-modal" id="rejectReasonModal" aria-label="Reject driver application" aria-hidden="true" hidden>
     <div class="drawer-head">
@@ -446,6 +464,6 @@ Other riders cannot view these details.</textarea></label>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="JS/components.js"></script>
-  <script type="module" src="JS/dashboard.js?v=8"></script>
+  <script type="module" src="JS/dashboard.js?v=10"></script>
 </body>
 </html>
