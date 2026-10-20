@@ -200,6 +200,11 @@
                   <button type="button" role="tab" aria-selected="false" data-driver-filter="attention">Needs attention <span id="attentionTabCount">0</span></button>
                   <button type="button" role="tab" aria-selected="false" data-driver-filter="all">All drivers <span id="allDriversTabCount">0</span></button>
                 </div>
+                <div class="rider-date-filters" aria-label="Filter drivers by registration date">
+                  <label><span>Registered from</span><input id="driverRegisteredFrom" type="date"></label>
+                  <label><span>Registered to</span><input id="driverRegisteredTo" type="date"></label>
+                  <button id="clearDriverDateFilter" class="ghost-button" type="button" hidden>Clear dates</button>
+                </div>
                 <p class="results-copy" id="driverResultsCopy" aria-live="polite">Loading drivers…</p>
               </div>
               <div class="table-scroll">

@@ -59,6 +59,8 @@ const state = {
   driverFilter: "applications",
   tripFilter: "enroute",
   searchQuery: "",
+  driverRegisteredFrom: "",
+  driverRegisteredTo: "",
   riderRegisteredFrom: "",
   riderRegisteredTo: ""
 };
@@ -69,6 +71,9 @@ const elements = {
   liveCopy: document.querySelectorAll("[data-live-copy]"),
   driverTableBody: document.getElementById("driversTableBody"),
   driverMessage: document.getElementById("driversTableMessage"),
+  driverRegisteredFrom: document.getElementById("driverRegisteredFrom"),
+  driverRegisteredTo: document.getElementById("driverRegisteredTo"),
+  clearDriverDateFilter: document.getElementById("clearDriverDateFilter"),
   riderTableBody: document.getElementById("ridersTableBody"),
   riderMessage: document.getElementById("ridersTableMessage"),
   riderRegisteredFrom: document.getElementById("riderRegisteredFrom"),
@@ -998,6 +1003,7 @@ function setTripFilter(filter) {
 function normalizeDriver(record, photoUrl) {
   const application = record.driver_application || {};
   const vehicle = record.vehicle || {};
+  const createdAt = toDate(record.createdAt || record.created_at);
 
   return {
     id: record.id,
@@ -1017,7 +1023,8 @@ function normalizeDriver(record, photoUrl) {
     subscriptionAmount: text(application.subscription_amount),
     idNumber: text(application.id_number),
     reviewNote: text(application.review_note),
-    createdAt: formatDate(record.createdAt),
+    createdAt: formatDate(createdAt),
+    createdAtDate: createdAt,
     updatedAt: formatDate(record.updatedAt),
     submittedAt: formatDate(application.submitted_at),
     resubmittedAt: formatDate(application.resubmitted_at),
@@ -1079,6 +1086,26 @@ function updateRiderDateFilterControl() {
   }
 }
 
+function matchesRegistrationDate(date, from, to) {
+  if (!from && !to) return true;
+  if (!date) return false;
+
+  const recordDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const fromDay = from ? new Date(`${from}T00:00:00`).getTime() : null;
+  const toDay = to ? new Date(`${to}T00:00:00`).getTime() : null;
+  return (!fromDay || recordDay >= fromDay) && (!toDay || recordDay <= toDay);
+}
+
+function driverMatchesRegistrationDate(driver) {
+  return matchesRegistrationDate(driver.createdAtDate, state.driverRegisteredFrom, state.driverRegisteredTo);
+}
+
+function updateDriverDateFilterControl() {
+  if (elements.clearDriverDateFilter) {
+    elements.clearDriverDateFilter.hidden = !state.driverRegisteredFrom && !state.driverRegisteredTo;
+  }
+}
+
 async function renderDriverRows(storageTools) {
   if (!elements.driverTableBody) return;
 
@@ -1133,7 +1160,20 @@ function driverCategory(driver) {
   const accountStatus = String(driver.driverStatus || "").toLowerCase();
   if (status.includes("reject") || status.includes("suspend") || accountStatus.includes("suspend")) return "attention";
   if (driver.verifiedDriver || status.includes("approv") || accountStatus.includes("approv") || accountStatus === "active") return "active";
-  return "applications";
+  return isCompleteDriverApplication(driver) ? "applications" : "other";
+}
+
+function isCompleteDriverApplication(driver) {
+  const application = driver.raw?.driver_application;
+  if (!application || typeof application !== "object") return false;
+
+  const status = String(application.status || "").toLowerCase();
+  const hasSubmittedApplication = Boolean(application.submitted_at) || /(submitted|pending|review|resubmitted)/.test(status);
+  const hasVehicleDetails = driver.vehicleModel !== "Not provided" && driver.numberPlate !== "Not provided";
+  const hasDocuments = [driver.idDocumentUrl, driver.proofOfPaymentUrl, driver.selfieUrl]
+    .every((url) => url && url !== "Not provided");
+
+  return hasSubmittedApplication && hasVehicleDetails && hasDocuments;
 }
 
 function driverFilterLabel() {
@@ -1141,9 +1181,9 @@ function driverFilterLabel() {
 }
 
 function matchesDriverWorkspace(driver) {
-  const categoryMatches = state.searchQuery || state.driverFilter === "all" || driverCategory(driver) === state.driverFilter;
+  const categoryMatches = state.driverFilter === "all" || driverCategory(driver) === state.driverFilter;
   const haystack = [driver.fullName, driver.email, driver.phone, driver.vehicleModel, driver.numberPlate, driver.applicationStatus, driver.verificationStatus].join(" ").toLowerCase();
-  return categoryMatches && haystack.includes(state.searchQuery.toLowerCase());
+  return categoryMatches && driverMatchesRegistrationDate(driver) && haystack.includes(state.searchQuery.toLowerCase());
 }
 
 function updateDriverResultsCopy(count) {
@@ -1154,7 +1194,8 @@ function updateDriverResultsCopy(count) {
 
 function updateDriverQueueCounts(drivers) {
   const counts = drivers.reduce((result, driver) => {
-    result[driverCategory(driver)] += 1;
+    const category = driverCategory(driver);
+    if (category in result) result[category] += 1;
     return result;
   }, { applications: 0, active: 0, attention: 0 });
   const values = {
@@ -2353,6 +2394,27 @@ function bindActions() {
     elements.globalSearch.value = "";
     elements.globalSearch.dispatchEvent(new Event("input"));
     elements.globalSearch.focus();
+  });
+
+  const applyDriverDateFilter = () => {
+    state.driverRegisteredFrom = elements.driverRegisteredFrom?.value || "";
+    state.driverRegisteredTo = elements.driverRegisteredTo?.value || "";
+    updateDriverDateFilterControl();
+    if (state.firebaseTools) {
+      renderDriverRows({
+        storage: state.firebaseTools.storage,
+        storageRef: state.firebaseTools.storageRef,
+        getDownloadURL: state.firebaseTools.getDownloadURL
+      });
+    }
+  };
+
+  elements.driverRegisteredFrom?.addEventListener("change", applyDriverDateFilter);
+  elements.driverRegisteredTo?.addEventListener("change", applyDriverDateFilter);
+  elements.clearDriverDateFilter?.addEventListener("click", () => {
+    if (elements.driverRegisteredFrom) elements.driverRegisteredFrom.value = "";
+    if (elements.driverRegisteredTo) elements.driverRegisteredTo.value = "";
+    applyDriverDateFilter();
   });
 
   const applyRiderDateFilter = () => {
