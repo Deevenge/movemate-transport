@@ -833,6 +833,11 @@ canvas {
   align-items: center;
 }
 
+.rider-date-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.rider-date-filters label { display: grid; gap: 5px; color: var(--muted); font-size: 0.7rem; font-weight: 800; }
+.rider-date-filters input { min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); background: #fff; font: inherit; }
+.rider-date-filters .ghost-button { min-height: 38px; }
+
 .table-scroll {
   overflow-x: auto;
 }

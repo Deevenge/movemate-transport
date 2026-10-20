@@ -243,7 +243,11 @@
             <section class="panel table-panel" id="passengers">
               <div class="panel-head table-head">
                 <div><h2>Rider Management</h2><p>Passenger accounts and account controls.</p></div>
-                <button class="primary-button" type="button"><i data-lucide="users"></i>Manage Riders</button>
+                <div class="rider-date-filters" aria-label="Filter riders by registration date">
+                  <label><span>Registered from</span><input id="riderRegisteredFrom" type="date"></label>
+                  <label><span>Registered to</span><input id="riderRegisteredTo" type="date"></label>
+                  <button id="clearRiderDateFilter" class="ghost-button" type="button" hidden>Clear dates</button>
+                </div>
               </div>
               <div class="table-scroll">
                 <table>
@@ -464,6 +468,6 @@ Other riders cannot view these details.</textarea></label>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="JS/components.js"></script>
-  <script type="module" src="JS/dashboard.js?v=10"></script>
+  <script type="module" src="JS/dashboard.js?v=12"></script>
 </body>
 </html>

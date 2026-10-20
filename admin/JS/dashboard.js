@@ -58,7 +58,9 @@ const state = {
   pendingConfirmAction: null,
   driverFilter: "applications",
   tripFilter: "enroute",
-  searchQuery: ""
+  searchQuery: "",
+  riderRegisteredFrom: "",
+  riderRegisteredTo: ""
 };
 
 const elements = {
@@ -69,6 +71,9 @@ const elements = {
   driverMessage: document.getElementById("driversTableMessage"),
   riderTableBody: document.getElementById("ridersTableBody"),
   riderMessage: document.getElementById("ridersTableMessage"),
+  riderRegisteredFrom: document.getElementById("riderRegisteredFrom"),
+  riderRegisteredTo: document.getElementById("riderRegisteredTo"),
+  clearRiderDateFilter: document.getElementById("clearRiderDateFilter"),
   globalSearch: document.getElementById("globalSearch"),
   globalSearchResults: document.getElementById("globalSearchResults"),
   globalSearchTitle: document.getElementById("globalSearchTitle"),
@@ -974,7 +979,8 @@ async function openTripChat(item) {
     }).join("");
   } catch (error) {
     console.error("Unable to load trip chat:", error);
-    elements.tripChatMessages.innerHTML = `<p class="trip-chat-empty">Could not load this conversation. Check Firebase permissions.</p>`;
+    const errorCode = text(error?.code || error?.message, "unknown error");
+    elements.tripChatMessages.innerHTML = `<p class="trip-chat-empty">Could not load this conversation. Firebase returned: ${escapeHtml(errorCode)}.</p>`;
   }
 }
 
@@ -1034,6 +1040,8 @@ async function buildNormalizedDriver(record, storageTools) {
 }
 
 function normalizeRider(record) {
+  const createdAt = toDate(record.createdAt || record.created_at);
+
   return {
     id: record.id,
     uid: text(record.uid, record.id),
@@ -1043,10 +1051,32 @@ function normalizeRider(record) {
     accountStatus: text(record.accountStatus || record.userStatus || record.status, "active"),
     accountStatusMessage: text(record.accountStatusMessage || record.statusMessage),
     accountStatusReason: text(record.accountStatusReason || record.statusReason),
-    createdAt: formatDate(record.createdAt || record.created_at),
+    createdAt: formatDate(createdAt),
+    createdAtDate: createdAt,
     photoUrl: defaultAvatar,
     raw: record
   };
+}
+
+function riderMatchesRegistrationDate(rider) {
+  if (!state.riderRegisteredFrom && !state.riderRegisteredTo) return true;
+  if (!rider.createdAtDate) return false;
+
+  const riderDay = new Date(
+    rider.createdAtDate.getFullYear(),
+    rider.createdAtDate.getMonth(),
+    rider.createdAtDate.getDate()
+  ).getTime();
+  const fromDay = state.riderRegisteredFrom ? new Date(`${state.riderRegisteredFrom}T00:00:00`).getTime() : null;
+  const toDay = state.riderRegisteredTo ? new Date(`${state.riderRegisteredTo}T00:00:00`).getTime() : null;
+
+  return (!fromDay || riderDay >= fromDay) && (!toDay || riderDay <= toDay);
+}
+
+function updateRiderDateFilterControl() {
+  if (elements.clearRiderDateFilter) {
+    elements.clearRiderDateFilter.hidden = !state.riderRegisteredFrom && !state.riderRegisteredTo;
+  }
 }
 
 async function renderDriverRows(storageTools) {
@@ -1159,11 +1189,19 @@ function renderRiderRows() {
 
   const riders = state.riders.map(normalizeRider);
   state.normalizedRiders = riders;
-  const filteredRiders = riders.filter((rider) => [rider.fullName, rider.email, rider.phone, rider.accountStatus].join(" ").toLowerCase().includes(state.searchQuery.toLowerCase()));
+  const filteredRiders = riders.filter((rider) => {
+    const matchesSearch = [rider.fullName, rider.email, rider.phone, rider.accountStatus]
+      .join(" ")
+      .toLowerCase()
+      .includes(state.searchQuery.toLowerCase());
+    return matchesSearch && riderMatchesRegistrationDate(rider);
+  });
+  state.normalizedRiders = filteredRiders;
   hideTableMessage(elements.riderMessage);
   if (!filteredRiders.length) {
     elements.riderTableBody.innerHTML = "";
-    setTableMessage(elements.riderMessage, `No riders found${state.searchQuery ? ` matching “${state.searchQuery}”` : ""}.`);
+    const dateCopy = state.riderRegisteredFrom || state.riderRegisteredTo ? " for the selected registration date" : "";
+    setTableMessage(elements.riderMessage, `No riders found${state.searchQuery ? ` matching “${state.searchQuery}”` : ""}${dateCopy}.`);
     return;
   }
   elements.riderTableBody.innerHTML = filteredRiders
@@ -2317,6 +2355,21 @@ function bindActions() {
     elements.globalSearch.focus();
   });
 
+  const applyRiderDateFilter = () => {
+    state.riderRegisteredFrom = elements.riderRegisteredFrom?.value || "";
+    state.riderRegisteredTo = elements.riderRegisteredTo?.value || "";
+    updateRiderDateFilterControl();
+    renderRiderRows();
+  };
+
+  elements.riderRegisteredFrom?.addEventListener("change", applyRiderDateFilter);
+  elements.riderRegisteredTo?.addEventListener("change", applyRiderDateFilter);
+  elements.clearRiderDateFilter?.addEventListener("click", () => {
+    if (elements.riderRegisteredFrom) elements.riderRegisteredFrom.value = "";
+    if (elements.riderRegisteredTo) elements.riderRegisteredTo.value = "";
+    applyRiderDateFilter();
+  });
+
   elements.globalSearchResultsList?.addEventListener("click", (event) => {
     const result = event.target.closest("button[data-search-target]");
     if (!result) return;
@@ -2649,6 +2702,7 @@ async function startRealtimeDashboard() {
       db,
       storage,
       auth,
+      collection,
       doc,
       onSnapshot,
       getDocs,
