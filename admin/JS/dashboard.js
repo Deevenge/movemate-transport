@@ -88,6 +88,7 @@ const elements = {
   driverFilterButtons: document.querySelectorAll("[data-driver-filter]"),
   downloadActiveDriversPdf: document.getElementById("downloadActiveDriversPdf"),
   tripTableBody: document.getElementById("tripsTableBody"),
+  tripsGrid: document.getElementById("tripsGrid"),
   tripMessage: document.getElementById("tripsTableMessage"),
   tripResultsCopy: document.getElementById("tripResultsCopy"),
   tripFilterButtons: document.querySelectorAll("[data-trip-filter]"),
@@ -97,6 +98,11 @@ const elements = {
   tripChatMeta: document.getElementById("tripChatMeta"),
   tripChatMessages: document.getElementById("tripChatMessages"),
   closeTripChat: document.getElementById("closeTripChat"),
+  tripDetailsModal: document.getElementById("tripDetailsModal"),
+  tripDetailsBackdrop: document.getElementById("tripDetailsBackdrop"),
+  tripDetailsTitle: document.getElementById("tripDetailsTitle"),
+  tripDetailsContent: document.getElementById("tripDetailsContent"),
+  closeTripDetails: document.getElementById("closeTripDetails"),
   drawer: document.getElementById("driverDrawer"),
   drawerBackdrop: document.getElementById("driverDrawerBackdrop"),
   drawerType: document.getElementById("drawerProfileType"),
@@ -894,6 +900,41 @@ function normalizeTripRecord(record, type) {
   };
 }
 
+function bookingSeats(booking) {
+  const value = booking.seatsBooked ?? booking.seats_booked ?? booking.numberOfSeats ?? booking.number_of_seats ?? booking.seats ?? booking.quantity ?? 1;
+  const seats = Number(value);
+  return Number.isFinite(seats) && seats > 0 ? seats : 1;
+}
+
+function isActiveBooking(booking) {
+  return !/cancel|declin|reject|refund|expire/i.test(text(booking.status || booking.bookingStatus || booking.booking_status, ""));
+}
+
+function tripBookings(trip) {
+  return state.bookings.filter((booking) => {
+    const bookingTripId = booking.tripId || booking.trip_id || booking.rideId || booking.ride_id || booking.trip?.id;
+    return String(bookingTripId || "") === String(trip.id);
+  }).filter(isActiveBooking);
+}
+
+function tripCapacity(trip, bookedSeats) {
+  const rawCapacity = trip.raw.totalSeats ?? trip.raw.total_seats ?? trip.raw.seatsAvailable ?? trip.raw.seats_available ?? trip.raw.availableSeats ?? trip.raw.available_seats ?? trip.raw.capacity ?? trip.raw.numberOfSeats;
+  const capacity = Number(rawCapacity);
+  // Some apps store remaining seats instead of the full capacity. Prefer explicit total/capacity fields.
+  const isRemainingOnly = trip.raw.seatsAvailable !== undefined || trip.raw.seats_available !== undefined || trip.raw.availableSeats !== undefined || trip.raw.available_seats !== undefined;
+  const total = Number.isFinite(capacity) && capacity >= 0 ? (isRemainingOnly ? capacity + bookedSeats : capacity) : null;
+  return { total, left: total === null ? null : Math.max(0, total - bookedSeats) };
+}
+
+function bookingPassenger(booking) {
+  const passengerId = booking.passengerId || booking.passenger_id || booking.riderId || booking.rider_id || booking.userId || booking.user_id || booking.customerId || booking.customer_id;
+  return {
+    name: text(booking.passengerName || booking.passenger_name || booking.riderName || booking.rider_name || booking.customerName, findUserName(passengerId)),
+    seats: bookingSeats(booking),
+    status: text(booking.status || booking.bookingStatus || booking.booking_status, "Confirmed")
+  };
+}
+
 function tripCategory(item) {
   const status = item.status.toLowerCase().replace(/[ _-]/g, "");
   if (item.type === "request" && (status.includes("match") || status.includes("accept") || status.includes("assign") || item.driver !== "Not assigned")) return "matched";
@@ -907,13 +948,14 @@ function tripFilterLabel() {
 }
 
 function renderTripRows() {
-  if (!elements.tripTableBody) return;
+  if (!elements.tripsGrid) return;
   const items = [
     ...state.trips.map((record) => normalizeTripRecord(record, "trip")),
     ...state.rideRequests.map((record) => normalizeTripRecord(record, "request"))
   ].sort((a, b) => (b.date || 0) - (a.date || 0));
   const counts = items.reduce((total, item) => { const category = tripCategory(item); if (category in total) total[category] += 1; return total; }, { enroute: 0, completed: 0, matched: 0 });
-  const values = { enrouteTripsCount: counts.enroute, completedTripsCount: counts.completed, matchedRequestsCount: counts.matched, enrouteTripsTabCount: counts.enroute, completedTripsTabCount: counts.completed, matchedRequestsTabCount: counts.matched, allTripsTabCount: items.length };
+  const bookedSeats = state.trips.reduce((total, trip) => total + tripBookings(normalizeTripRecord(trip, "trip")).reduce((sum, booking) => sum + bookingSeats(booking), 0), 0);
+  const values = { enrouteTripsCount: counts.enroute, completedTripsCount: counts.completed, matchedRequestsCount: counts.matched, tripSeatsBookedCount: bookedSeats, enrouteTripsTabCount: counts.enroute, completedTripsTabCount: counts.completed, matchedRequestsTabCount: counts.matched, allTripsTabCount: state.trips.length };
   Object.entries(values).forEach(([id, value]) => { const element = document.getElementById(id); if (element) element.textContent = value; });
   const filtered = items.filter((item) => {
     const categoryMatches = state.searchQuery || state.tripFilter === "all" || tripCategory(item) === state.tripFilter;
@@ -922,20 +964,57 @@ function renderTripRows() {
   });
   if (elements.tripResultsCopy) elements.tripResultsCopy.textContent = `${filtered.length} ${filtered.length === 1 ? "result" : "results"}${state.searchQuery ? ` for “${state.searchQuery}”` : ""}`;
   if (!filtered.length) {
-    elements.tripTableBody.innerHTML = "";
+    elements.tripsGrid.innerHTML = "";
     setTableMessage(elements.tripMessage, `No ${tripFilterLabel()} found${state.searchQuery ? ` matching “${state.searchQuery}”` : ""}.`);
     return;
   }
   hideTableMessage(elements.tripMessage);
-  elements.tripTableBody.innerHTML = filtered.map((item) => `
-    <tr>
-      <td data-label="Status"><span class="badge ${badgeClass(item.status)}">${escapeHtml(item.status)}</span></td>
-      <td data-label="Driver"><strong>${escapeHtml(item.driver)}</strong></td>
-      <td data-label="Passenger"><strong>${escapeHtml(item.passenger)}</strong></td>
-      <td data-label="Route"><span class="route-copy">${escapeHtml(item.pickup)} <i data-lucide="arrow-right"></i> ${escapeHtml(item.destination)}</span></td>
-      <td data-label="Updated">${escapeHtml(formatDate(item.date))}</td>
-      <td data-label="Chat"><button class="trip-chat-button" type="button" data-trip-chat-id="${escapeHtml(item.id)}">View chat</button></td>
-    </tr>`).join("");
+  elements.tripsGrid.innerHTML = filtered.map((item) => {
+    const bookings = item.type === "trip" ? tripBookings(item) : [];
+    const seatsBooked = bookings.reduce((sum, booking) => sum + bookingSeats(booking), 0);
+    const capacity = item.type === "trip" ? tripCapacity(item, seatsBooked) : { total: null, left: null };
+    const manifestPreview = bookings.slice(0, 3).map(bookingPassenger);
+    const capacityCopy = capacity.total === null ? "Capacity not set" : `${capacity.left} seat${capacity.left === 1 ? "" : "s"} left`;
+    const occupancy = capacity.total ? Math.min(100, Math.round((seatsBooked / capacity.total) * 100)) : 0;
+    return `<article class="trip-card">
+      <div class="trip-card-top"><span class="badge ${badgeClass(item.status)}">${escapeHtml(item.status)}</span><time>${escapeHtml(formatDate(item.date))}</time></div>
+      <div class="trip-route"><span>${escapeHtml(item.pickup)}</span><i data-lucide="move-right"></i><span>${escapeHtml(item.destination)}</span></div>
+      <div class="trip-driver"><span class="trip-driver-icon"><i data-lucide="steering-wheel"></i></span><div><small>Posted by driver</small><strong>${escapeHtml(item.driver)}</strong></div></div>
+      <div class="trip-capacity"><div><small>Booked</small><strong>${seatsBooked} <span>seat${seatsBooked === 1 ? "" : "s"}</span></strong></div><div><small>Availability</small><strong>${escapeHtml(capacityCopy)}</strong></div></div>
+      <div class="capacity-bar" aria-label="${occupancy}% occupied"><span style="width:${occupancy}%"></span></div>
+      <div class="trip-manifest-preview"><div><strong>Passengers</strong><small>${bookings.length ? `${bookings.length} booking${bookings.length === 1 ? "" : "s"}` : "No bookings yet"}</small></div>${manifestPreview.length ? `<div class="passenger-chips">${manifestPreview.map((passenger) => `<span title="${escapeHtml(passenger.name)}">${escapeHtml(passenger.name)}</span>`).join("")}${bookings.length > 3 ? `<em>+${bookings.length - 3}</em>` : ""}</div>` : ""}</div>
+      <div class="trip-card-actions"><button class="trip-detail-button" type="button" data-trip-details-id="${escapeHtml(item.id)}" data-trip-type="${escapeHtml(item.type)}">View details</button>${item.type === "trip" ? `<button class="trip-chat-button" type="button" data-trip-chat-id="${escapeHtml(item.id)}">View chat</button>` : ""}</div>
+    </article>`;
+  }).join("");
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function closeTripDetails() {
+  document.body.classList.remove("trip-details-open");
+  elements.tripDetailsModal?.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    if (!document.body.classList.contains("trip-details-open")) {
+      if (elements.tripDetailsBackdrop) elements.tripDetailsBackdrop.hidden = true;
+      if (elements.tripDetailsModal) elements.tripDetailsModal.hidden = true;
+    }
+  }, 220);
+}
+
+function openTripDetails(item) {
+  if (!item || !elements.tripDetailsContent) return;
+  const bookings = item.type === "trip" ? tripBookings(item) : [];
+  const passengers = bookings.map(bookingPassenger);
+  const seatsBooked = bookings.reduce((sum, booking) => sum + bookingSeats(booking), 0);
+  const capacity = item.type === "trip" ? tripCapacity(item, seatsBooked) : { total: null, left: null };
+  if (elements.tripDetailsTitle) elements.tripDetailsTitle.textContent = `${item.pickup} to ${item.destination}`;
+  elements.tripDetailsContent.innerHTML = `<div class="trip-detail-route"><span>${escapeHtml(item.pickup)}</span><i data-lucide="move-right"></i><span>${escapeHtml(item.destination)}</span></div>
+    <div class="trip-detail-stats"><div><small>Driver</small><strong>${escapeHtml(item.driver)}</strong></div><div><small>Trip status</small><strong>${escapeHtml(item.status)}</strong></div><div><small>Seats booked</small><strong>${seatsBooked}</strong></div><div><small>Seats left</small><strong>${capacity.left === null ? "Not set" : capacity.left}</strong></div></div>
+    <div class="manifest-head"><div><p class="eyebrow">Booking manifest</p><h3>Passengers on this trip</h3></div><span>${passengers.length} booking${passengers.length === 1 ? "" : "s"}</span></div>
+    <div class="manifest-list">${passengers.length ? passengers.map((passenger, index) => `<article class="manifest-passenger"><span>${index + 1}</span><div><strong>${escapeHtml(passenger.name)}</strong><small>${passenger.seats} seat${passenger.seats === 1 ? "" : "s"} · ${escapeHtml(passenger.status)}</small></div></article>`).join("") : `<p class="trip-chat-empty">No confirmed passengers have booked this trip yet.</p>`}</div>`;
+  elements.tripDetailsBackdrop.hidden = false;
+  elements.tripDetailsModal.hidden = false;
+  elements.tripDetailsModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("trip-details-open");
   if (window.lucide) window.lucide.createIcons();
 }
 
@@ -2448,18 +2527,38 @@ function bindActions() {
     button.addEventListener("click", () => setTripFilter(button.dataset.tripFilter));
   });
 
-  elements.tripTableBody?.addEventListener("click", (event) => {
+  elements.tripsGrid?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-trip-chat-id]");
-    if (!button) return;
-    const item = [
+    const items = [
       ...state.trips.map((record) => normalizeTripRecord(record, "trip")),
       ...state.rideRequests.map((record) => normalizeTripRecord(record, "request"))
-    ].find((trip) => trip.id === button.dataset.tripChatId);
-    if (item) openTripChat(item);
+    ];
+    const detailsButton = event.target.closest("button[data-trip-details-id]");
+    if (detailsButton) {
+      openTripDetails(items.find((trip) => trip.id === detailsButton.dataset.tripDetailsId && trip.type === detailsButton.dataset.tripType));
+      return;
+    }
+    if (button) openTripChat(items.find((trip) => trip.id === button.dataset.tripChatId));
   });
 
   elements.closeTripChat?.addEventListener("click", closeTripChat);
   elements.tripChatBackdrop?.addEventListener("click", closeTripChat);
+  elements.closeTripDetails?.addEventListener("click", closeTripDetails);
+  elements.tripDetailsBackdrop?.addEventListener("click", closeTripDetails);
+
+  document.querySelectorAll(".side-nav a[data-view]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const view = link.dataset.view;
+      if (view === "dashboard") return;
+      const target = document.getElementById(view);
+      if (!target) return;
+      event.preventDefault();
+      if (view === "trips") setTripFilter("all");
+      document.querySelectorAll(".side-nav a").forEach((item) => item.classList.toggle("active", item === link));
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.body.classList.remove("nav-open");
+    });
+  });
 
   document.querySelectorAll("[data-jump-to]").forEach((button) => {
     button.addEventListener("click", () => document.getElementById(button.dataset.jumpTo)?.scrollIntoView({ behavior: "smooth", block: "start" }));

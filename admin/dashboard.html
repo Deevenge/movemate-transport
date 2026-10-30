@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="CSS/components.css">
-  <link rel="stylesheet" href="CSS/dashboard.css?v=7">
+  <link rel="stylesheet" href="CSS/dashboard.css?v=8">
 </head>
 <body>
   <div class="admin-shell">
@@ -28,7 +28,7 @@
         <a class="active" href="#" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Dashboard</span></a>
         <a href="#drivers" data-view="drivers"><i data-lucide="id-card"></i><span>Drivers</span></a>
         <a href="#passengers" data-view="passengers"><i data-lucide="users"></i><span>Passengers</span></a>
-        <a href="#" data-view="trips"><i data-lucide="route"></i><span>Trips</span></a>
+        <a href="#trips" data-view="trips"><i data-lucide="route"></i><span>Trips</span></a>
         <a href="#" data-view="requests"><i data-lucide="radio-tower"></i><span>Ride Requests</span></a>
         <a href="#" data-view="bookings"><i data-lucide="calendar-check"></i><span>Bookings</span></a>
         <a href="#" data-view="payments"><i data-lucide="wallet-cards"></i><span>Payments</span></a>
@@ -155,28 +155,25 @@
 
             <section class="panel trip-workspace" id="trips">
               <div class="panel-head table-head">
-                <div><p class="eyebrow">Trip operations</p><h2>Follow every ride in motion</h2><p>See en route trips, completed rides, and requests matched to drivers.</p></div>
+                <div><p class="eyebrow">Trip operations</p><h2>Every driver trip, clearly managed</h2><p>Review routes, capacity, booking passengers, and trip activity in one place.</p></div>
+                <span class="trip-live-label"><i data-lucide="radio"></i> Live from Firestore</span>
               </div>
               <div class="driver-queue-summary trip-queue-summary" aria-label="Trip queue summary">
                 <button type="button" class="queue-card active" data-trip-filter="enroute"><span class="queue-icon cyan"><i data-lucide="navigation"></i></span><span><strong id="enrouteTripsCount">0</strong><small>En route now</small></span></button>
                 <button type="button" class="queue-card" data-trip-filter="completed"><span class="queue-icon green"><i data-lucide="circle-check-big"></i></span><span><strong id="completedTripsCount">0</strong><small>Completed trips</small></span></button>
-                <button type="button" class="queue-card" data-trip-filter="matched"><span class="queue-icon amber"><i data-lucide="handshake"></i></span><span><strong id="matchedRequestsCount">0</strong><small>Matched requests</small></span></button>
+                <button type="button" class="queue-card" data-trip-filter="all"><span class="queue-icon amber"><i data-lucide="users-round"></i></span><span><strong id="tripSeatsBookedCount">0</strong><small>Seats booked</small></span></button>
               </div>
               <div class="driver-toolbar">
                 <div class="driver-tabs" role="tablist" aria-label="Trip lists">
                   <button type="button" class="active" role="tab" aria-selected="true" data-trip-filter="enroute">En route <span id="enrouteTripsTabCount">0</span></button>
                   <button type="button" role="tab" aria-selected="false" data-trip-filter="completed">Completed <span id="completedTripsTabCount">0</span></button>
                   <button type="button" role="tab" aria-selected="false" data-trip-filter="matched">Matched requests <span id="matchedRequestsTabCount">0</span></button>
-                  <button type="button" role="tab" aria-selected="false" data-trip-filter="all">All activity <span id="allTripsTabCount">0</span></button>
+                  <button type="button" role="tab" aria-selected="false" data-trip-filter="all">All trips <span id="allTripsTabCount">0</span></button>
                 </div>
                 <p class="results-copy" id="tripResultsCopy" aria-live="polite">Loading trips…</p>
               </div>
-              <div class="table-scroll">
-                <table class="trip-table">
-                  <thead><tr><th>Status</th><th>Driver</th><th>Passenger</th><th>Route</th><th>Updated</th><th>Chat</th></tr></thead>
-                  <tbody id="tripsTableBody"><tr class="skeleton-row"><td><span class="skeleton skeleton-pill"></span></td><td><span class="skeleton skeleton-text"></span></td><td><span class="skeleton skeleton-text"></span></td><td><span class="skeleton skeleton-text wide"></span></td><td><span class="skeleton skeleton-text"></span></td></tr></tbody>
-                </table>
-              </div>
+              <div class="trip-grid" id="tripsGrid" aria-live="polite"><div class="trip-card trip-card-skeleton"><span class="skeleton skeleton-text wide"></span><span class="skeleton skeleton-text"></span><span class="skeleton skeleton-text wide"></span></div></div>
+              <div id="tripsTableBody" hidden></div>
               <p class="table-message" id="tripsTableMessage" hidden></p>
             </section>
 
@@ -406,6 +403,15 @@
     <div class="trip-chat-messages" id="tripChatMessages" aria-live="polite"></div>
   </section>
 
+  <div class="drawer-modal-backdrop" id="tripDetailsBackdrop" hidden></div>
+  <section class="trip-details-modal" id="tripDetailsModal" aria-label="Trip booking details" aria-hidden="true" hidden>
+    <div class="drawer-head">
+      <div><p class="eyebrow">Trip manifest</p><h2 id="tripDetailsTitle">Trip details</h2></div>
+      <button class="icon-button" id="closeTripDetails" type="button" aria-label="Close trip details"><i data-lucide="x"></i></button>
+    </div>
+    <div class="trip-details-content" id="tripDetailsContent"></div>
+  </section>
+
   <div class="drawer-modal-backdrop" id="rejectReasonBackdrop" hidden></div>
   <section class="driver-action-modal" id="rejectReasonModal" aria-label="Reject driver application" aria-hidden="true" hidden>
     <div class="drawer-head">
@@ -473,6 +479,6 @@ Other riders cannot view these details.</textarea></label>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script src="JS/components.js"></script>
-  <script type="module" src="JS/dashboard.js?v=12"></script>
+  <script type="module" src="JS/dashboard.js?v=13"></script>
 </body>
 </html>
